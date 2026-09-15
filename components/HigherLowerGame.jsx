@@ -43,24 +43,52 @@ function shuffle(deck) {
 }
 
 const STARTING_MONEY = 1000;
-const CHIPS = [10, 25, 50, 100];
+const BASE_BET = 50;
+const GUESSES_PER_STAGE = 10;
+const FEEDBACK_LIMIT = 100;
+const REVEAL_MS = 3000; // how long both cards stay visible side by side
+const SETTLE_MS = 350; // how long the old card takes to fade out afterward
+
+function betForStage(stage) {
+  return BASE_BET * Math.pow(2, stage - 1);
+}
+
+function Card({ card }) {
+  return (
+    <div className="w-full h-full bg-white rounded-xl shadow-lg flex flex-col items-center justify-center">
+      <span className={`text-4xl font-semibold ${card.color}`}>{card.label}</span>
+      <span className={`text-4xl ${card.color}`}>{card.suit}</span>
+    </div>
+  );
+}
 
 export default function HigherLowerGame() {
   const [deck, setDeck] = useState([]);
   const [current, setCurrent] = useState(null);
+  const [incoming, setIncoming] = useState(null);
+  // phase: 'idle' (one card showing) -> 'compare' (both visible) -> 'settle' (old fading out)
+  const [phase, setPhase] = useState("idle");
   const [money, setMoney] = useState(STARTING_MONEY);
-  const [bet, setBet] = useState(50);
-  const [message, setMessage] = useState("Place your bet, then call it.");
+  // A single running counter avoids nested setState calls (which React's
+  // dev-mode double-invoke was causing to skip every other stage).
+  const [totalGuesses, setTotalGuesses] = useState(0);
+  const stage = Math.floor(totalGuesses / GUESSES_PER_STAGE) + 1;
+  const guessesInStage = totalGuesses % GUESSES_PER_STAGE;
+  const [message, setMessage] = useState("Call it: will the next card be higher or lower?");
   const [gameOver, setGameOver] = useState(false);
-  const [revealing, setRevealing] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackSent, setFeedbackSent] = useState(false);
 
   const startNewGame = useCallback(() => {
     const fresh = shuffle(buildDeck());
     setCurrent(fresh[0]);
+    setIncoming(null);
+    setPhase("idle");
     setDeck(fresh.slice(1));
     setMoney(STARTING_MONEY);
-    setBet(50);
-    setMessage("Place your bet, then call it.");
+    setTotalGuesses(0);
+    setMessage("Call it: will the next card be higher or lower?");
     setGameOver(false);
   }, []);
 
@@ -72,7 +100,7 @@ export default function HigherLowerGame() {
     if (money <= 0) setGameOver(true);
   }, [money]);
 
-  function drawNext(deckToUse) {
+  function drawFrom(deckToUse) {
     if (deckToUse.length < 1) {
       const reshuffled = shuffle(buildDeck());
       return { next: reshuffled[0], remaining: reshuffled.slice(1) };
@@ -81,36 +109,63 @@ export default function HigherLowerGame() {
   }
 
   function handleGuess(guess) {
-    if (gameOver || revealing || !current) return;
-    const safeBet = Math.min(bet, money);
-    const { next, remaining } = drawNext(deck);
+    if (gameOver || phase !== "idle" || !current) return;
+    const bet = betForStage(stage);
+    const { next, remaining } = drawFrom(deck);
 
-    setRevealing(true);
+    // Resolve the outcome right away, at the moment the new card is
+    // revealed — not after it finishes animating in.
+    if (next.value === current.value) {
+      setMessage(`Push — both ${current.label}s. Your bet is safe.`);
+    } else {
+      const correct =
+        (guess === "higher" && next.value > current.value) ||
+        (guess === "lower" && next.value < current.value);
+      setMoney((m) => (correct ? m + bet : m - bet));
+      setMessage(
+        correct
+          ? `Correct! ${next.label}${next.suit} was ${guess}. +€${bet}`
+          : `Wrong. ${next.label}${next.suit} was not ${guess}. -€${bet}`
+      );
+    }
+
+    setDeck(remaining);
+    setIncoming(next);
+    setPhase("compare");
+    setTotalGuesses((t) => t + 1);
+
+    // Hold both cards on screen so the player can compare them...
     setTimeout(() => {
-      if (next.value === current.value) {
-        setMessage(`Push — both ${current.label}s. Your bet is safe.`);
-      } else {
-        const correct =
-          (guess === "higher" && next.value > current.value) ||
-          (guess === "lower" && next.value < current.value);
-        setMoney((m) => (correct ? m + safeBet : m - safeBet));
-        setMessage(
-          correct
-            ? `Correct! ${next.label}${next.suit} was ${guess}. +€${safeBet}`
-            : `Wrong. ${next.label}${next.suit} was not ${guess}. -€${safeBet}`
-        );
-      }
-      setCurrent(next);
-      setDeck(remaining);
-      setRevealing(false);
-    }, 450);
+      setPhase("settle"); // ...then fade the old one out...
+      setTimeout(() => {
+        setCurrent(next); // ...and promote the new card to "current".
+        setIncoming(null);
+        setPhase("idle");
+      }, SETTLE_MS);
+    }, REVEAL_MS);
+  }
+
+  function submitFeedback() {
+    const trimmed = feedbackText.trim();
+    if (!trimmed) return;
+    // Placeholder for now — once Supabase is connected, this will insert
+    // into a "feedback" table instead of just logging locally.
+    console.log("Feedback submitted:", trimmed);
+    setFeedbackSent(true);
+    setFeedbackText("");
+    setTimeout(() => {
+      setFeedbackSent(false);
+      setFeedbackOpen(false);
+    }, 1500);
   }
 
   if (!current) return null;
 
+  const bet = betForStage(stage);
+
   return (
-    <div className="min-h-[600px] w-full flex items-center justify-center bg-emerald-950 p-6">
-      <div className="w-full max-w-md rounded-3xl bg-emerald-900 border border-emerald-700/40 shadow-2xl p-8 flex flex-col items-center gap-6">
+    <div className="min-h-[640px] w-full flex items-center justify-center bg-emerald-950 p-6">
+      <div className="w-full max-w-md rounded-3xl bg-emerald-900 border border-emerald-700/40 shadow-2xl p-8 flex flex-col items-center gap-5">
         <div className="text-center">
           <p className="text-emerald-300 text-xs tracking-wide uppercase mb-1">Higher or lower</p>
           <p className="font-serif text-4xl text-amber-300 tabular-nums">
@@ -118,68 +173,63 @@ export default function HigherLowerGame() {
           </p>
         </div>
 
-        <div
-          className={`w-32 h-44 rounded-xl bg-white shadow-lg flex flex-col items-center justify-center transition-transform duration-300 ${
-            revealing ? "scale-95 opacity-60" : "scale-100 opacity-100"
-          }`}
-        >
-          <span className={`text-4xl font-semibold ${current.color}`}>{current.label}</span>
-          <span className={`text-4xl ${current.color}`}>{current.suit}</span>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="px-3 py-1 rounded-full bg-emerald-800 text-emerald-100 border border-emerald-600/50">
+            Stage {stage}
+          </span>
+          <span className="px-3 py-1 rounded-full bg-amber-500/90 text-emerald-950 font-medium">
+            Bet €{bet}
+          </span>
+          <span className="text-emerald-300">
+            {guessesInStage}/{GUESSES_PER_STAGE} this stage
+          </span>
         </div>
+
+        {phase === "idle" ? (
+          <div className="w-32 h-44">
+            <Card card={current} />
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] text-emerald-400 uppercase tracking-wide">Was</span>
+              <div
+                className={`w-28 h-40 transition-opacity duration-300 ${
+                  phase === "settle" ? "opacity-0" : "opacity-100"
+                }`}
+              >
+                <Card card={current} />
+              </div>
+            </div>
+            <span className="text-emerald-500 text-lg">→</span>
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] text-amber-300 uppercase tracking-wide">Now</span>
+              <div className="w-28 h-40">
+                <Card card={incoming} />
+              </div>
+            </div>
+          </div>
+        )}
 
         <p className="text-emerald-100 text-sm text-center min-h-[2.5em]">{message}</p>
 
         {!gameOver ? (
-          <>
-            <div className="flex gap-2 flex-wrap justify-center">
-              {CHIPS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setBet(Math.min(c, money))}
-                  disabled={revealing}
-                  className={`w-12 h-12 rounded-full border-2 text-xs font-medium flex items-center justify-center transition ${
-                    bet === c
-                      ? "border-amber-400 bg-amber-500 text-emerald-950"
-                      : "border-emerald-600 bg-emerald-800 text-emerald-100 hover:border-amber-400"
-                  } disabled:opacity-40`}
-                >
-                  €{c}
-                </button>
-              ))}
-              <button
-                onClick={() => setBet(money)}
-                disabled={revealing}
-                className={`w-12 h-12 rounded-full border-2 text-[10px] font-medium flex items-center justify-center transition ${
-                  bet === money
-                    ? "border-rose-400 bg-rose-600 text-white"
-                    : "border-rose-700 bg-emerald-800 text-rose-300 hover:border-rose-400"
-                } disabled:opacity-40`}
-              >
-                ALL IN
-              </button>
-            </div>
-
-            <p className="text-emerald-300 text-xs">
-              Betting <span className="text-amber-300 font-medium">€{Math.min(bet, money)}</span>
-            </p>
-
-            <div className="flex gap-4 w-full">
-              <button
-                onClick={() => handleGuess("higher")}
-                disabled={revealing}
-                className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-emerald-950 font-medium transition disabled:opacity-50"
-              >
-                ↑ Higher
-              </button>
-              <button
-                onClick={() => handleGuess("lower")}
-                disabled={revealing}
-                className="flex-1 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-medium transition disabled:opacity-50"
-              >
-                ↓ Lower
-              </button>
-            </div>
-          </>
+          <div className="flex gap-4 w-full">
+            <button
+              onClick={() => handleGuess("higher")}
+              disabled={phase !== "idle"}
+              className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-emerald-950 font-medium transition disabled:opacity-50"
+            >
+              ↑ Higher
+            </button>
+            <button
+              onClick={() => handleGuess("lower")}
+              disabled={phase !== "idle"}
+              className="flex-1 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-medium transition disabled:opacity-50"
+            >
+              ↓ Lower
+            </button>
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-3">
             <p className="text-rose-300 font-medium">Out of money. House wins this round.</p>
@@ -191,6 +241,53 @@ export default function HigherLowerGame() {
             </button>
           </div>
         )}
+
+        <div className="w-full border-t border-emerald-700/40 pt-4">
+          {!feedbackOpen ? (
+            <button
+              onClick={() => setFeedbackOpen(true)}
+              className="text-xs text-emerald-300 hover:text-amber-300 transition underline underline-offset-2"
+            >
+              Got feedback? Tell us
+            </button>
+          ) : feedbackSent ? (
+            <p className="text-xs text-amber-300">Thanks — feedback received.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value.slice(0, FEEDBACK_LIMIT))}
+                maxLength={FEEDBACK_LIMIT}
+                rows={2}
+                placeholder="What would make this better?"
+                className="w-full resize-none rounded-lg bg-emerald-800 border border-emerald-600/50 text-emerald-50 text-xs p-2 placeholder:text-emerald-400 focus:outline-none focus:border-amber-400"
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-emerald-400">
+                  {feedbackText.length}/{FEEDBACK_LIMIT}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setFeedbackOpen(false);
+                      setFeedbackText("");
+                    }}
+                    className="text-xs text-emerald-400 hover:text-emerald-200 transition px-2"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={submitFeedback}
+                    disabled={!feedbackText.trim()}
+                    className="text-xs bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-emerald-950 font-medium px-3 py-1 rounded-lg transition"
+                  >
+                    Send
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
