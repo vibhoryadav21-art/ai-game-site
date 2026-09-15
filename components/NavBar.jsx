@@ -57,7 +57,7 @@ export default function NavBar() {
       </Link>
 
       <div className="flex items-center gap-4 text-sm">
-        <Link href="/game" className="text-emerald-200 hover:text-amber-300 transition">
+        <Link href="/games" className="text-emerald-200 hover:text-amber-300 transition">
           {t.nav.play}
         </Link>
 
