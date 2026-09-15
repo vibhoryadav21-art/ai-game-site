@@ -81,10 +81,23 @@ export default function HigherLowerGame() {
   const [wins, setWins] = useState(0);
   const [losses, setLosses] = useState(0);
   const [gameOver, setGameOver] = useState(false);
+  const [currentRunPeak, setCurrentRunPeak] = useState(STARTING_MONEY);
+  const [lastScore, setLastScore] = useState(0);
+  const [highScore, setHighScore] = useState(0);
+  const [gamesPlayed, setGamesPlayed] = useState(0);
 
   // --- Account / saved-progress state ---
   const [user, setUser] = useState(null);
+  const [anonId, setAnonId] = useState(null);
   const [statsLoaded, setStatsLoaded] = useState(false);
+
+  // Whichever identity we currently have — a logged-in user takes priority,
+  // otherwise we fall back to this browser's anonymous id.
+  const identity = user
+    ? { column: "user_id", value: user.id }
+    : anonId
+    ? { column: "anon_id", value: anonId }
+    : null;
 
   // --- Feedback state ---
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -100,6 +113,7 @@ export default function HigherLowerGame() {
     setPhase("idle");
     setDeck(fresh.slice(1));
     setMoney(STARTING_MONEY);
+    setCurrentRunPeak(STARTING_MONEY);
     setTotalGuesses(0);
     setWins(0);
     setLosses(0);
@@ -112,16 +126,28 @@ export default function HigherLowerGame() {
     resetLocalGame();
   }, []);
 
-  // Load a logged-in player's saved stats (or create their row the first
-  // time), and keep listening in case they log in/out while on this page.
+  // Guests get a random id the first time they visit, saved in this browser
+  // so repeat visits (from the same browser) accumulate under the same row.
   useEffect(() => {
+    let id = window.localStorage.getItem("anon_id");
+    if (!id) {
+      id = crypto.randomUUID();
+      window.localStorage.setItem("anon_id", id);
+    }
+    setAnonId(id);
+  }, []);
+
+  // Load this identity's saved stats (or create their row the first time),
+  // and keep listening in case they log in/out while on this page.
+  useEffect(() => {
+    if (!identity) return;
     let active = true;
 
-    async function loadOrCreateStats(userId) {
+    async function loadOrCreateStats() {
       const { data, error } = await supabase
         .from("game_stats")
         .select("*")
-        .eq("user_id", userId)
+        .eq(identity.column, identity.value)
         .maybeSingle();
 
       if (!active) return;
@@ -133,52 +159,57 @@ export default function HigherLowerGame() {
         setWins(data.wins);
         setLosses(data.losses);
         setTotalGuesses(data.total_guesses);
+        setCurrentRunPeak(data.current_run_peak);
+        setLastScore(data.last_score);
+        setHighScore(data.high_score);
+        setGamesPlayed(data.games_played);
         setGameOver(data.money <= 0);
       } else {
-        // First time this user has played — create their row.
+        // First time this identity has played — create their row.
         await supabase.from("game_stats").insert({
-          user_id: userId,
+          [identity.column]: identity.value,
           money: STARTING_MONEY,
           wins: 0,
           losses: 0,
           total_guesses: 0,
+          current_run_peak: STARTING_MONEY,
+          last_score: 0,
+          high_score: 0,
+          games_played: 0,
         });
       }
       setStatsLoaded(true);
     }
 
-    supabase.auth.getSession().then(({ data }) => {
-      const sessionUser = data.session?.user ?? null;
-      if (!active) return;
-      setUser(sessionUser);
-      if (sessionUser) {
-        loadOrCreateStats(sessionUser.id);
-      } else {
-        setStatsLoaded(true);
-      }
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      const sessionUser = session?.user ?? null;
-      setUser(sessionUser);
-      if (sessionUser) {
-        setStatsLoaded(false);
-        loadOrCreateStats(sessionUser.id);
-      }
-    });
+    setStatsLoaded(false);
+    loadOrCreateStats();
 
     return () => {
       active = false;
-      listener.subscription.unsubscribe();
     };
+  }, [identity?.column, identity?.value]);
+
+  // Watch for login/logout so we switch from the anon row to the user's
+  // row (or back) without needing a page refresh.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Persist stats to Supabase — only meaningful once we know who's logged in.
+  // Persist stats to Supabase for whichever identity is currently active.
   async function saveStats(fields) {
-    if (!user) return;
-    const { error } = await supabase
-      .from("game_stats")
-      .upsert({ user_id: user.id, ...fields, updated_at: new Date().toISOString() });
+    if (!identity) return;
+    const { error } = await supabase.from("game_stats").upsert(
+      { [identity.column]: identity.value, ...fields, updated_at: new Date().toISOString() },
+      { onConflict: identity.column }
+    );
     if (error) console.error("Failed to save game stats:", error.message);
   }
 
@@ -217,6 +248,16 @@ export default function HigherLowerGame() {
     }
 
     const newTotalGuesses = totalGuesses + 1;
+    const newPeak = Math.max(currentRunPeak, newMoney);
+    const busted = newMoney <= 0;
+
+    // A "score" is the highest balance reached during a run, locked in the
+    // moment that run ends (goes bust). Still-in-progress runs don't touch
+    // last/high score yet — only completed ones do.
+    const newLastScore = busted ? newPeak : lastScore;
+    const newHighScore = busted ? Math.max(highScore, newPeak) : highScore;
+    const newGamesPlayed = busted ? gamesPlayed + 1 : gamesPlayed;
+    const nextPeak = busted ? STARTING_MONEY : newPeak;
 
     setMoney(newMoney);
     setWins(newWins);
@@ -225,12 +266,20 @@ export default function HigherLowerGame() {
     setIncoming(next);
     setPhase("compare");
     setTotalGuesses(newTotalGuesses);
+    setCurrentRunPeak(nextPeak);
+    setLastScore(newLastScore);
+    setHighScore(newHighScore);
+    setGamesPlayed(newGamesPlayed);
 
     saveStats({
       money: newMoney,
       wins: newWins,
       losses: newLosses,
       total_guesses: newTotalGuesses,
+      current_run_peak: nextPeak,
+      last_score: newLastScore,
+      high_score: newHighScore,
+      games_played: newGamesPlayed,
     });
 
     // Hold both cards on screen so the player can compare them...
@@ -246,8 +295,14 @@ export default function HigherLowerGame() {
 
   function startNewGame() {
     resetLocalGame();
-    if (user) {
-      saveStats({ money: STARTING_MONEY, wins: 0, losses: 0, total_guesses: 0 });
+    if (identity) {
+      saveStats({
+        money: STARTING_MONEY,
+        wins: 0,
+        losses: 0,
+        total_guesses: 0,
+        current_run_peak: STARTING_MONEY,
+      });
     }
   }
 
@@ -315,6 +370,20 @@ export default function HigherLowerGame() {
             {t.game.losses} <span className="text-amber-300 font-medium">{losses}</span>
           </span>
         </div>
+
+        {user && (
+          <div className="flex items-center gap-4 text-xs text-emerald-300">
+            <span>
+              {t.game.lastScore} <span className="text-amber-300 font-medium">€{lastScore}</span>
+            </span>
+            <span>
+              {t.game.highScore} <span className="text-amber-300 font-medium">€{highScore}</span>
+            </span>
+            <span>
+              {t.game.gamesPlayed} <span className="text-amber-300 font-medium">{gamesPlayed}</span>
+            </span>
+          </div>
+        )}
 
         {phase === "idle" ? (
           <div className="w-32 h-44">
