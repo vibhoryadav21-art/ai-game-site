@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useLanguage } from "@/context/LanguageContext";
 
 const SUITS = [
   { symbol: "♠", color: "text-neutral-900" },
@@ -24,10 +25,7 @@ const RANKS = [
   { label: "A", value: 14 },
 ];
 
-const GAMES = [
-  { id: "higher_lower", label: "Higher or lower" },
-  { id: "general", label: "General feedback" },
-];
+const GAME_IDS = ["higher_lower", "general"];
 
 function buildDeck() {
   const deck = [];
@@ -69,6 +67,7 @@ function Card({ card }) {
 }
 
 export default function HigherLowerGame() {
+  const { t } = useLanguage();
   const [deck, setDeck] = useState([]);
   const [current, setCurrent] = useState(null);
   const [incoming, setIncoming] = useState(null);
@@ -78,7 +77,7 @@ export default function HigherLowerGame() {
   const [totalGuesses, setTotalGuesses] = useState(0);
   const stage = Math.floor(totalGuesses / GUESSES_PER_STAGE) + 1;
   const guessesInStage = totalGuesses % GUESSES_PER_STAGE;
-  const [message, setMessage] = useState("Call it: will the next card be higher or lower?");
+  const [message, setMessage] = useState(t.game.callIt);
   const [wins, setWins] = useState(0);
   const [losses, setLosses] = useState(0);
   const [gameOver, setGameOver] = useState(false);
@@ -104,7 +103,7 @@ export default function HigherLowerGame() {
     setTotalGuesses(0);
     setWins(0);
     setLosses(0);
-    setMessage("Call it: will the next card be higher or lower?");
+    setMessage(t.game.callIt);
     setGameOver(false);
   }
 
@@ -201,7 +200,7 @@ export default function HigherLowerGame() {
     let newLosses = losses;
 
     if (next.value === current.value) {
-      setMessage(`Push — both ${current.label}s. Your bet is safe.`);
+      setMessage(t.game.push(current.label));
     } else {
       const correct =
         (guess === "higher" && next.value > current.value) ||
@@ -209,10 +208,11 @@ export default function HigherLowerGame() {
       newMoney = correct ? money + bet : money - bet;
       if (correct) newWins += 1;
       else newLosses += 1;
+      const guessWord = guess === "higher" ? t.game.higher : t.game.lower;
       setMessage(
         correct
-          ? `Correct! ${next.label}${next.suit} was ${guess}. +€${bet}`
-          : `Wrong. ${next.label}${next.suit} was not ${guess}. -€${bet}`
+          ? t.game.correct(next.label, next.suit, guessWord, bet)
+          : t.game.wrong(next.label, next.suit, guessWord, bet)
       );
     }
 
@@ -283,36 +283,36 @@ export default function HigherLowerGame() {
     <div className="min-h-[640px] w-full flex items-center justify-center bg-emerald-950 p-6">
       <div className="w-full max-w-md rounded-3xl bg-emerald-900 border border-emerald-700/40 shadow-2xl p-8 flex flex-col items-center gap-5">
         <div className="text-center">
-          <p className="text-emerald-300 text-xs tracking-wide uppercase mb-1">Higher or lower</p>
+          <p className="text-emerald-300 text-xs tracking-wide uppercase mb-1">{t.game.title}</p>
           <p className="font-serif text-4xl text-amber-300 tabular-nums">
             €{money.toLocaleString("en-IE")}
           </p>
           {!user && (
-            <p className="text-[10px] text-emerald-400 mt-1">Log in to save your progress</p>
+            <p className="text-[10px] text-emerald-400 mt-1">{t.game.loginToSave}</p>
           )}
         </div>
 
         <div className="flex items-center gap-3 text-xs">
           <span className="px-3 py-1 rounded-full bg-emerald-800 text-emerald-100 border border-emerald-600/50">
-            Stage {stage}
+            {t.game.stage} {stage}
           </span>
           <span className="px-3 py-1 rounded-full bg-amber-500/90 text-emerald-950 font-medium">
-            Bet €{bet}
+            {t.game.bet} €{bet}
           </span>
           <span className="text-emerald-300">
-            {guessesInStage}/{GUESSES_PER_STAGE} this stage
+            {guessesInStage}/{GUESSES_PER_STAGE} {t.game.thisStage}
           </span>
         </div>
 
         <div className="flex items-center gap-4 text-xs text-emerald-300">
           <span>
-            Bets placed <span className="text-amber-300 font-medium">{totalGuesses}</span>
+            {t.game.betsPlaced} <span className="text-amber-300 font-medium">{totalGuesses}</span>
           </span>
           <span>
-            Wins <span className="text-amber-300 font-medium">{wins}</span>
+            {t.game.wins} <span className="text-amber-300 font-medium">{wins}</span>
           </span>
           <span>
-            Losses <span className="text-amber-300 font-medium">{losses}</span>
+            {t.game.losses} <span className="text-amber-300 font-medium">{losses}</span>
           </span>
         </div>
 
@@ -323,7 +323,7 @@ export default function HigherLowerGame() {
         ) : (
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-center gap-1">
-              <span className="text-[10px] text-emerald-400 uppercase tracking-wide">Was</span>
+              <span className="text-[10px] text-emerald-400 uppercase tracking-wide">{t.game.was}</span>
               <div
                 className={`w-28 h-40 transition-opacity duration-300 ${
                   phase === "settle" ? "opacity-0" : "opacity-100"
@@ -334,7 +334,7 @@ export default function HigherLowerGame() {
             </div>
             <span className="text-emerald-500 text-lg">→</span>
             <div className="flex flex-col items-center gap-1">
-              <span className="text-[10px] text-amber-300 uppercase tracking-wide">Now</span>
+              <span className="text-[10px] text-amber-300 uppercase tracking-wide">{t.game.now}</span>
               <div className="w-28 h-40">
                 <Card card={incoming} />
               </div>
@@ -351,24 +351,24 @@ export default function HigherLowerGame() {
               disabled={phase !== "idle" || !statsLoaded}
               className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-emerald-950 font-medium transition disabled:opacity-50"
             >
-              ↑ Higher
+              ↑ {t.game.higher}
             </button>
             <button
               onClick={() => handleGuess("lower")}
               disabled={phase !== "idle" || !statsLoaded}
               className="flex-1 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-medium transition disabled:opacity-50"
             >
-              ↓ Lower
+              ↓ {t.game.lower}
             </button>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3">
-            <p className="text-rose-300 font-medium">Out of money. House wins this round.</p>
+            <p className="text-rose-300 font-medium">{t.game.outOfMoney}</p>
             <button
               onClick={startNewGame}
               className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-emerald-950 font-medium transition"
             >
-              Start over with €{STARTING_MONEY}
+              {t.game.startOver(STARTING_MONEY)}
             </button>
           </div>
         )}
@@ -379,10 +379,10 @@ export default function HigherLowerGame() {
               onClick={() => setFeedbackOpen(true)}
               className="text-xs text-emerald-300 hover:text-amber-300 transition underline underline-offset-2"
             >
-              Got feedback? Tell us
+              {t.game.feedbackPrompt}
             </button>
           ) : feedbackSent ? (
-            <p className="text-xs text-amber-300">Thanks — feedback received.</p>
+            <p className="text-xs text-amber-300">{t.game.feedbackThanks}</p>
           ) : (
             <div className="flex flex-col gap-2">
               <select
@@ -390,9 +390,9 @@ export default function HigherLowerGame() {
                 onChange={(e) => setFeedbackGame(e.target.value)}
                 className="w-full rounded-lg bg-emerald-800 border border-emerald-600/50 text-emerald-50 text-xs p-2 focus:outline-none focus:border-amber-400"
               >
-                {GAMES.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.label}
+                {GAME_IDS.map((id) => (
+                  <option key={id} value={id}>
+                    {id === "general" ? t.game.gameGeneral : t.game.gameHigherLower}
                   </option>
                 ))}
               </select>
@@ -401,10 +401,10 @@ export default function HigherLowerGame() {
                 onChange={(e) => setFeedbackText(e.target.value.slice(0, FEEDBACK_LIMIT))}
                 maxLength={FEEDBACK_LIMIT}
                 rows={2}
-                placeholder="What would make this better?"
+                placeholder={t.game.feedbackPlaceholder}
                 className="w-full resize-none rounded-lg bg-emerald-800 border border-emerald-600/50 text-emerald-50 text-xs p-2 placeholder:text-emerald-400 focus:outline-none focus:border-amber-400"
               />
-              {feedbackError && <p className="text-[10px] text-rose-300">{feedbackError}</p>}
+              {feedbackError && <p className="text-[10px] text-rose-300">{t.game.feedbackError}</p>}
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-emerald-400">
                   {feedbackText.length}/{FEEDBACK_LIMIT}
@@ -418,14 +418,14 @@ export default function HigherLowerGame() {
                     }}
                     className="text-xs text-emerald-400 hover:text-emerald-200 transition px-2"
                   >
-                    Cancel
+                    {t.game.cancel}
                   </button>
                   <button
                     onClick={submitFeedback}
                     disabled={!feedbackText.trim()}
                     className="text-xs bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-emerald-950 font-medium px-3 py-1 rounded-lg transition"
                   >
-                    Send
+                    {t.game.send}
                   </button>
                 </div>
               </div>
