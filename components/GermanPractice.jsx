@@ -172,10 +172,10 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
         <span>
           {stats.total_correct}/{stats.total_answered} correct overall
         </span>
-        <Link href="/games/german/inbox" className="text-amber-300 hover:text-amber-200 transition">
+        <Link href="/learning/german/inbox" className="text-amber-300 hover:text-amber-200 transition">
           Inbox
         </Link>
-        <Link href="/games/german/leaderboard" className="text-amber-300 hover:text-amber-200 transition">
+        <Link href="/learning/german/leaderboard" className="text-amber-300 hover:text-amber-200 transition">
           Leaderboard
         </Link>
       </div>

@@ -15,11 +15,19 @@ const LANGUAGES = [
 function Logo() {
   return (
     <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
-      <rect width="28" height="28" rx="7" fill="#064e3b" />
-      <text x="7" y="12" fontSize="9" fill="#f59e0b" textAnchor="middle">♠</text>
-      <text x="21" y="12" fontSize="9" fill="#fb7185" textAnchor="middle">♥</text>
-      <text x="7" y="23" fontSize="9" fill="#fb7185" textAnchor="middle">♦</text>
-      <text x="21" y="23" fontSize="9" fill="#f59e0b" textAnchor="middle">♣</text>
+      <circle cx="14" cy="14" r="3" fill="#f59e0b" />
+      <ellipse
+        cx="14" cy="14" rx="12" ry="5"
+        fill="none" stroke="#34d399" strokeOpacity="0.6" strokeWidth="1"
+        transform="rotate(-25 14 14)"
+      />
+      <ellipse
+        cx="14" cy="14" rx="9" ry="12"
+        fill="none" stroke="#fb7185" strokeOpacity="0.5" strokeWidth="1"
+        transform="rotate(35 14 14)"
+      />
+      <circle cx="24.5" cy="9" r="1.6" fill="#34d399" />
+      <circle cx="6" cy="21" r="1.3" fill="#fb7185" />
     </svg>
   )
 }
@@ -57,8 +65,14 @@ export default function NavBar() {
       </Link>
 
       <div className="flex items-center gap-4 text-sm">
+        <Link href="/about" className="text-emerald-200 hover:text-amber-300 transition">
+          {t.nav.about}
+        </Link>
         <Link href="/games" className="text-emerald-200 hover:text-amber-300 transition">
-          {t.nav.play}
+          {t.nav.games}
+        </Link>
+        <Link href="/learning" className="text-emerald-200 hover:text-amber-300 transition">
+          {t.nav.learning}
         </Link>
 
         <select

@@ -60,7 +60,7 @@ export default function GermanLeaderboardPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center gap-6 p-6">
       <div className="w-full max-w-lg flex items-center justify-between">
         <h1 className="font-serif text-2xl text-amber-300">Leaderboard</h1>
-        <Link href="/games/german" className="text-xs text-zinc-400 hover:text-amber-300 transition">
+        <Link href="/learning/german" className="text-xs text-zinc-400 hover:text-amber-300 transition">
           Back to practice
         </Link>
       </div>

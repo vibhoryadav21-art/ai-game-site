@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gaming Central",
-  description: "Play games against AI, anywhere in the world.",
+  title: "Kino's Hub",
+  description: "Games, learning, and more — all in one place.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
