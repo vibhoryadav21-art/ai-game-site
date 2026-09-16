@@ -19,18 +19,16 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   const [sendStatus, setSendStatus] = useState("idle"); // idle | sending | sent | error
   const [communityResults, setCommunityResults] = useState([]);
 
-  // "auto" follows the player's adaptive current_level; any explicit level
-  // choice switches into manual review mode, which doesn't affect leveling.
-  const [practiceLevel, setPracticeLevel] = useState("auto");
+  // "all" mixes questions from every level; picking a specific level
+  // switches into manual review mode, which doesn't affect leveling.
+  const [practiceLevel, setPracticeLevel] = useState("all");
   const [practiceTopic, setPracticeTopic] = useState("all");
   const [topics, setTopics] = useState([]);
 
-  const effectiveLevel = practiceLevel === "auto" ? stats.current_level : practiceLevel;
-  const isAutoMode = practiceLevel === "auto";
-
   const fetchQuestion = useCallback(async (level, topic, avoidId) => {
     setLoadingQuestion(true);
-    let query = supabase.from("german_questions").select("*").eq("level", level);
+    let query = supabase.from("german_questions").select("*");
+    if (level && level !== "all") query = query.eq("level", level);
     if (topic && topic !== "all") query = query.eq("topic", topic);
     const { data, error } = await query;
 
@@ -51,8 +49,12 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   }, []);
 
   const loadTopics = useCallback(async (level) => {
-    const { data } = await supabase.from("german_questions").select("topic").eq("level", level);
-    const unique = [...new Set((data || []).map((d) => d.topic).filter(Boolean))];
+    let query = supabase.from("german_questions").select("topic");
+    if (level && level !== "all") query = query.eq("level", level);
+    const { data } = await query;
+    const unique = [...new Set((data || []).map((d) => d.topic).filter(Boolean))].sort((a, b) =>
+      a.localeCompare(b)
+    );
     setTopics(unique);
   }, []);
 
@@ -67,8 +69,8 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
 
   // Initial load, once.
   useEffect(() => {
-    fetchQuestion(stats.current_level, "all", null);
-    loadTopics(stats.current_level);
+    fetchQuestion("all", "all", null);
+    loadTopics("all");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -87,15 +89,14 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     setPracticeLevel(newLevel);
     setPracticeTopic("all");
     resetQuestionUI();
-    const lvl = newLevel === "auto" ? stats.current_level : newLevel;
-    loadTopics(lvl);
-    fetchQuestion(lvl, "all", question?.id);
+    loadTopics(newLevel);
+    fetchQuestion(newLevel, "all", question?.id);
   }
 
   function handleTopicChange(newTopic) {
     setPracticeTopic(newTopic);
     resetQuestionUI();
-    fetchQuestion(effectiveLevel, newTopic, question?.id);
+    fetchQuestion(practiceLevel, newTopic, question?.id);
   }
 
   async function handleSelect(optionKey) {
@@ -178,9 +179,10 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     let newLevel = stats.current_level;
     let note = "";
 
-    // Adaptive leveling only applies when practicing at your own current
-    // level — deliberately reviewing a different level shouldn't move you.
-    if (isAutoMode) {
+    // Adaptive leveling only applies while mixing all levels, and only for
+    // questions that happen to land on your actual current level — picking
+    // a specific level to review deliberately never moves you.
+    if (practiceLevel === "all" && level === stats.current_level) {
       const updatedWindow = [...recentAnswers, correct];
       if (updatedWindow.length >= WINDOW_SIZE) {
         const correctCount = updatedWindow.filter(Boolean).length;
@@ -222,8 +224,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
       .eq("user_id", user.id);
 
     resetQuestionUI();
-    const nextLevel = isAutoMode ? newLevel : effectiveLevel;
-    fetchQuestion(nextLevel, practiceTopic, question.id);
+    fetchQuestion(practiceLevel, practiceTopic, question.id);
   }
 
   if (loadingQuestion || !question) {
@@ -244,6 +245,9 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
       <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-zinc-400">
+        <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200">
+          Your level: {stats.current_level}
+        </span>
         <span>
           {stats.total_correct}/{stats.total_answered} correct overall
         </span>
@@ -261,7 +265,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
           onChange={(e) => handleLevelChange(e.target.value)}
           className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-amber-400"
         >
-          <option value="auto">Auto (your level: {stats.current_level})</option>
+          <option value="all">All levels</option>
           {LEVELS.map((lvl) => (
             <option key={lvl} value={lvl}>
               {lvl}
@@ -283,9 +287,9 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
         </select>
       </div>
 
-      {!isAutoMode && (
+      {practiceLevel !== "all" && (
         <p className="text-[11px] text-zinc-500">
-          Reviewing {effectiveLevel} — this won't change your actual level.
+          Reviewing {practiceLevel} — this won't change your actual level.
         </p>
       )}
 
