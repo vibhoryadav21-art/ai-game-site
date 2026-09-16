@@ -17,24 +17,22 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   const [friends, setFriends] = useState([]);
   const [selectedFriend, setSelectedFriend] = useState("");
   const [sendStatus, setSendStatus] = useState("idle"); // idle | sending | sent | error
+  const [communityResults, setCommunityResults] = useState([]);
 
-  useEffect(() => {
-    async function loadFriends() {
-      const { data, error } = await supabase
-        .from("german_stats")
-        .select("user_id, display_name")
-        .neq("user_id", user.id);
-      if (!error && data) setFriends(data);
-    }
-    loadFriends();
-  }, [user.id]);
+  // "auto" follows the player's adaptive current_level; any explicit level
+  // choice switches into manual review mode, which doesn't affect leveling.
+  const [practiceLevel, setPracticeLevel] = useState("auto");
+  const [practiceTopic, setPracticeTopic] = useState("all");
+  const [topics, setTopics] = useState([]);
 
-  const fetchQuestion = useCallback(async (level, avoidId) => {
+  const effectiveLevel = practiceLevel === "auto" ? stats.current_level : practiceLevel;
+  const isAutoMode = practiceLevel === "auto";
+
+  const fetchQuestion = useCallback(async (level, topic, avoidId) => {
     setLoadingQuestion(true);
-    const { data, error } = await supabase
-      .from("german_questions")
-      .select("*")
-      .eq("level", level);
+    let query = supabase.from("german_questions").select("*").eq("level", level);
+    if (topic && topic !== "all") query = query.eq("topic", topic);
+    const { data, error } = await query;
 
     if (error || !data || data.length === 0) {
       console.error("Failed to load question:", error?.message);
@@ -52,15 +50,94 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     setLoadingQuestion(false);
   }, []);
 
+  const loadTopics = useCallback(async (level) => {
+    const { data } = await supabase.from("german_questions").select("topic").eq("level", level);
+    const unique = [...new Set((data || []).map((d) => d.topic).filter(Boolean))];
+    setTopics(unique);
+  }, []);
+
+  function resetQuestionUI() {
+    setSelected(null);
+    setAnswered(false);
+    setSelectedFriend("");
+    setSendStatus("idle");
+    setLevelChangeNote("");
+    setCommunityResults([]);
+  }
+
+  // Initial load, once.
   useEffect(() => {
-    fetchQuestion(stats.current_level, null);
+    fetchQuestion(stats.current_level, "all", null);
+    loadTopics(stats.current_level);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleSelect(optionKey) {
-    if (answered) return;
+  useEffect(() => {
+    async function loadFriends() {
+      const { data, error } = await supabase
+        .from("german_stats")
+        .select("user_id, display_name")
+        .neq("user_id", user.id);
+      if (!error && data) setFriends(data);
+    }
+    loadFriends();
+  }, [user.id]);
+
+  function handleLevelChange(newLevel) {
+    setPracticeLevel(newLevel);
+    setPracticeTopic("all");
+    resetQuestionUI();
+    const lvl = newLevel === "auto" ? stats.current_level : newLevel;
+    loadTopics(lvl);
+    fetchQuestion(lvl, "all", question?.id);
+  }
+
+  function handleTopicChange(newTopic) {
+    setPracticeTopic(newTopic);
+    resetQuestionUI();
+    fetchQuestion(effectiveLevel, newTopic, question?.id);
+  }
+
+  async function handleSelect(optionKey) {
+    if (answered || !question) return;
     setSelected(optionKey);
     setAnswered(true);
+
+    const correct = optionKey === question.correct_option;
+
+    // Log this attempt, then pull everyone's latest attempt on this exact
+    // question so the "how did others do" panel can show up immediately.
+    await supabase.from("question_attempts").insert({
+      user_id: user.id,
+      question_id: question.id,
+      selected_option: optionKey,
+      correct,
+    });
+
+    const { data: attempts } = await supabase
+      .from("question_attempts")
+      .select("user_id, selected_option, correct, answered_at")
+      .eq("question_id", question.id)
+      .order("answered_at", { ascending: false });
+
+    if (attempts) {
+      const latestByUser = {};
+      for (const a of attempts) {
+        if (!(a.user_id in latestByUser)) latestByUser[a.user_id] = a;
+      }
+      const userIds = Object.keys(latestByUser);
+      const { data: people } = await supabase
+        .from("german_stats")
+        .select("user_id, display_name")
+        .in("user_id", userIds);
+      const nameMap = Object.fromEntries((people || []).map((p) => [p.user_id, p.display_name]));
+      const list = Object.values(latestByUser).map((a) => ({
+        ...a,
+        name: a.user_id === user.id ? "You" : nameMap[a.user_id] || "Someone",
+      }));
+      list.sort((a, b) => (a.name === "You" ? -1 : b.name === "You" ? 1 : 0));
+      setCommunityResults(list);
+    }
   }
 
   async function sendToFriend() {
@@ -87,7 +164,8 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     const correct = selected === question.correct_option;
     const level = question.level;
 
-    // Update overall + per-level totals.
+    // Update overall + per-level totals — this always happens, regardless
+    // of auto vs manual mode.
     const levelStats = { ...stats.level_stats };
     const prev = levelStats[level] || { correct: 0, total: 0 };
     levelStats[level] = {
@@ -97,26 +175,28 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     const totalAnswered = stats.total_answered + 1;
     const totalCorrect = stats.total_correct + (correct ? 1 : 0);
 
-    // Track the last few answers *at the current level* to decide on a
-    // level change every WINDOW_SIZE questions.
-    const updatedWindow = [...recentAnswers, correct];
     let newLevel = stats.current_level;
     let note = "";
 
-    if (updatedWindow.length >= WINDOW_SIZE) {
-      const correctCount = updatedWindow.filter(Boolean).length;
-      const currentIndex = LEVELS.indexOf(stats.current_level);
+    // Adaptive leveling only applies when practicing at your own current
+    // level — deliberately reviewing a different level shouldn't move you.
+    if (isAutoMode) {
+      const updatedWindow = [...recentAnswers, correct];
+      if (updatedWindow.length >= WINDOW_SIZE) {
+        const correctCount = updatedWindow.filter(Boolean).length;
+        const currentIndex = LEVELS.indexOf(stats.current_level);
 
-      if (correctCount >= LEVEL_UP_THRESHOLD && currentIndex < LEVELS.length - 1) {
-        newLevel = LEVELS[currentIndex + 1];
-        note = `${correctCount}/${WINDOW_SIZE} correct — leveling up to ${newLevel}!`;
-      } else if (correctCount <= LEVEL_DOWN_THRESHOLD && currentIndex > 0) {
-        newLevel = LEVELS[currentIndex - 1];
-        note = `${correctCount}/${WINDOW_SIZE} correct — dropping back to ${newLevel} for now.`;
+        if (correctCount >= LEVEL_UP_THRESHOLD && currentIndex < LEVELS.length - 1) {
+          newLevel = LEVELS[currentIndex + 1];
+          note = `${correctCount}/${WINDOW_SIZE} correct — leveling up to ${newLevel}!`;
+        } else if (correctCount <= LEVEL_DOWN_THRESHOLD && currentIndex > 0) {
+          newLevel = LEVELS[currentIndex - 1];
+          note = `${correctCount}/${WINDOW_SIZE} correct — dropping back to ${newLevel} for now.`;
+        }
+        setRecentAnswers([]);
+      } else {
+        setRecentAnswers(updatedWindow);
       }
-      setRecentAnswers([]);
-    } else {
-      setRecentAnswers(updatedWindow);
     }
 
     const updatedStats = {
@@ -141,11 +221,9 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
       })
       .eq("user_id", user.id);
 
-    setSelected(null);
-    setAnswered(false);
-    setSelectedFriend("");
-    setSendStatus("idle");
-    fetchQuestion(newLevel, question.id);
+    resetQuestionUI();
+    const nextLevel = isAutoMode ? newLevel : effectiveLevel;
+    fetchQuestion(nextLevel, practiceTopic, question.id);
   }
 
   if (loadingQuestion || !question) {
@@ -165,10 +243,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
-      <div className="flex items-center gap-3 text-xs text-zinc-400">
-        <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700">
-          Level {stats.current_level}
-        </span>
+      <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-zinc-400">
         <span>
           {stats.total_correct}/{stats.total_answered} correct overall
         </span>
@@ -179,6 +254,40 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
           Leaderboard
         </Link>
       </div>
+
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <select
+          value={practiceLevel}
+          onChange={(e) => handleLevelChange(e.target.value)}
+          className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-amber-400"
+        >
+          <option value="auto">Auto (your level: {stats.current_level})</option>
+          {LEVELS.map((lvl) => (
+            <option key={lvl} value={lvl}>
+              {lvl}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={practiceTopic}
+          onChange={(e) => handleTopicChange(e.target.value)}
+          className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-amber-400"
+        >
+          <option value="all">All topics</option>
+          {topics.map((topic) => (
+            <option key={topic} value={topic}>
+              {topic}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {!isAutoMode && (
+        <p className="text-[11px] text-zinc-500">
+          Reviewing {effectiveLevel} — this won't change your actual level.
+        </p>
+      )}
 
       <p className="text-xl text-center max-w-md">{question.question}</p>
 
@@ -206,11 +315,27 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
       </div>
 
       {answered && (
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-3 w-full max-w-md">
           <p className={selected === question.correct_option ? "text-emerald-300" : "text-rose-300"}>
             {selected === question.correct_option ? "Correct!" : "Not quite."}
           </p>
           {levelChangeNote && <p className="text-amber-300 text-sm">{levelChangeNote}</p>}
+
+          {communityResults.length > 0 && (
+            <div className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex flex-col gap-1">
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wide">
+                Everyone's answers on this question
+              </p>
+              {communityResults.map((r) => (
+                <p
+                  key={r.user_id}
+                  className={`text-xs ${r.correct ? "text-emerald-300" : "text-rose-300"}`}
+                >
+                  {r.name}: {r.selected_option.toUpperCase()} {r.correct ? "✓" : "✗"}
+                </p>
+              ))}
+            </div>
+          )}
 
           {friends.length > 0 && (
             <div className="flex items-center gap-2">

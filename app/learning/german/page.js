@@ -75,13 +75,13 @@ export default function GermanGamePage() {
         <p className="text-zinc-300">You need an account to play this game.</p>
         <div className="flex gap-3">
           <Link
-            href="/login"
+            href="/login?redirect=/learning/german"
             className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-amber-400 transition"
           >
             Log in
           </Link>
           <Link
-            href="/signup"
+            href="/signup?redirect=/learning/german"
             className="px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-medium transition"
           >
             Sign up

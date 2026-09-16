@@ -1,15 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/'
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -22,16 +24,16 @@ export default function LoginPage() {
     if (error) {
       setError(error.message)
     } else {
-      router.push('/game')
+      router.push(redirectTo)
       router.refresh()
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-emerald-950 p-6">
+    <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-6">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm bg-emerald-900 rounded-2xl p-8 flex flex-col gap-4 border border-emerald-700/40"
+        className="w-full max-w-sm bg-zinc-900 rounded-2xl p-8 flex flex-col gap-4 border border-zinc-700"
       >
         <h1 className="text-xl text-amber-300 font-serif mb-2">Log in</h1>
         <input
@@ -40,7 +42,7 @@ export default function LoginPage() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email"
-          className="rounded-lg bg-emerald-800 border border-emerald-600/50 text-emerald-50 p-2 placeholder:text-emerald-400 focus:outline-none focus:border-amber-400"
+          className="rounded-lg bg-zinc-800 border border-zinc-600 text-zinc-50 p-2 placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
         />
         <input
           type="password"
@@ -48,23 +50,34 @@ export default function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
-          className="rounded-lg bg-emerald-800 border border-emerald-600/50 text-emerald-50 p-2 placeholder:text-emerald-400 focus:outline-none focus:border-amber-400"
+          className="rounded-lg bg-zinc-800 border border-zinc-600 text-zinc-50 p-2 placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
         />
         {error && <p className="text-rose-300 text-xs">{error}</p>}
         <button
           type="submit"
           disabled={loading}
-          className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-emerald-950 font-medium rounded-lg py-2 transition"
+          className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-medium rounded-lg py-2 transition"
         >
           {loading ? 'Logging in…' : 'Log in'}
         </button>
-        <p className="text-emerald-300 text-xs text-center">
+        <p className="text-zinc-400 text-xs text-center">
           No account yet?{' '}
-          <a href="/signup" className="text-amber-300 underline">
+          <a
+            href={`/signup${redirectTo !== '/' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`}
+            className="text-amber-300 underline"
+          >
             Sign up
           </a>
         </p>
       </form>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+      <LoginForm />
+    </Suspense>
   )
 }
