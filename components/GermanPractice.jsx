@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
@@ -171,6 +172,9 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
         <span>
           {stats.total_correct}/{stats.total_answered} correct overall
         </span>
+        <Link href="/games/german/inbox" className="text-amber-300 hover:text-amber-200 transition">
+          Inbox
+        </Link>
       </div>
 
       <p className="text-xl text-center max-w-md">{question.question}</p>
