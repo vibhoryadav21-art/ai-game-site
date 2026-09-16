@@ -175,6 +175,9 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
         <Link href="/games/german/inbox" className="text-amber-300 hover:text-amber-200 transition">
           Inbox
         </Link>
+        <Link href="/games/german/leaderboard" className="text-amber-300 hover:text-amber-200 transition">
+          Leaderboard
+        </Link>
       </div>
 
       <p className="text-xl text-center max-w-md">{question.question}</p>
