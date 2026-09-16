@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import GermanPlacementTest from '@/components/GermanPlacementTest'
+import GermanPractice from '@/components/GermanPractice'
 
 export default function GermanGamePage() {
   const [checked, setChecked] = useState(false)
@@ -99,12 +100,6 @@ export default function GermanGamePage() {
     )
   }
 
-  // Practice screen comes next — placement is done, so this is a
-  // placeholder until that's built.
-  return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-4">
-      <p className="text-zinc-400">Your level: <span className="text-amber-300">{stats.current_level}</span></p>
-      <p className="text-zinc-500 text-sm">Practice screen coming in the next step.</p>
-    </div>
-  )
+  // Practice screen — placement is done.
+  return <GermanPractice user={user} stats={stats} onStatsChange={setStats} />
 }
