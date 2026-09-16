@@ -13,6 +13,20 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   const [answered, setAnswered] = useState(false);
   const [recentAnswers, setRecentAnswers] = useState([]);
   const [levelChangeNote, setLevelChangeNote] = useState("");
+  const [friends, setFriends] = useState([]);
+  const [selectedFriend, setSelectedFriend] = useState("");
+  const [sendStatus, setSendStatus] = useState("idle"); // idle | sending | sent | error
+
+  useEffect(() => {
+    async function loadFriends() {
+      const { data, error } = await supabase
+        .from("german_stats")
+        .select("user_id, display_name")
+        .neq("user_id", user.id);
+      if (!error && data) setFriends(data);
+    }
+    loadFriends();
+  }, [user.id]);
 
   const fetchQuestion = useCallback(async (level, avoidId) => {
     setLoadingQuestion(true);
@@ -46,6 +60,26 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     if (answered) return;
     setSelected(optionKey);
     setAnswered(true);
+  }
+
+  async function sendToFriend() {
+    if (!selectedFriend || !question) return;
+    setSendStatus("sending");
+
+    const { error } = await supabase.from("sent_questions").insert({
+      question_id: question.id,
+      sender_id: user.id,
+      receiver_id: selectedFriend,
+      sender_answer: selected,
+      sender_correct: selected === question.correct_option,
+    });
+
+    if (error) {
+      console.error("Failed to send question:", error.message);
+      setSendStatus("error");
+    } else {
+      setSendStatus("sent");
+    }
   }
 
   async function handleNext() {
@@ -108,6 +142,8 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
 
     setSelected(null);
     setAnswered(false);
+    setSelectedFriend("");
+    setSendStatus("idle");
     fetchQuestion(newLevel, question.id);
   }
 
@@ -168,6 +204,40 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
             {selected === question.correct_option ? "Correct!" : "Not quite."}
           </p>
           {levelChangeNote && <p className="text-amber-300 text-sm">{levelChangeNote}</p>}
+
+          {friends.length > 0 && (
+            <div className="flex items-center gap-2">
+              {sendStatus === "sent" ? (
+                <p className="text-xs text-emerald-300">Sent!</p>
+              ) : (
+                <>
+                  <select
+                    value={selectedFriend}
+                    onChange={(e) => setSelectedFriend(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-amber-400"
+                  >
+                    <option value="">Send this question to…</option>
+                    {friends.map((f) => (
+                      <option key={f.user_id} value={f.user_id}>
+                        {f.display_name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={sendToFriend}
+                    disabled={!selectedFriend || sendStatus === "sending"}
+                    className="text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-zinc-200 px-3 py-1.5 rounded-lg transition"
+                  >
+                    {sendStatus === "sending" ? "Sending…" : "Send"}
+                  </button>
+                </>
+              )}
+              {sendStatus === "error" && (
+                <p className="text-xs text-rose-300">Couldn't send — try again.</p>
+              )}
+            </div>
+          )}
+
           <button
             onClick={handleNext}
             className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition"
