@@ -3,9 +3,12 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
+import { useLanguage } from '@/context/LanguageContext'
+import GermanPlacementTest from '@/components/GermanPlacementTest'
 import GermanPractice from '@/components/GermanPractice'
 
 export default function GermanGamePage() {
+  const { t } = useLanguage()
   const [checked, setChecked] = useState(false)
   const [user, setUser] = useState(null)
   const [stats, setStats] = useState(null)
@@ -63,7 +66,7 @@ export default function GermanGamePage() {
   if (!checked || loadingStats) {
     return (
       <div className="flex-1 bg-zinc-950 text-zinc-100 flex items-center justify-center">
-        <p className="text-zinc-400">Loading…</p>
+        <p className="text-zinc-400">{t.practice.loading}</p>
       </div>
     )
   }
@@ -71,25 +74,43 @@ export default function GermanGamePage() {
   if (!user) {
     return (
       <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-zinc-300">You need an account to play this game.</p>
+        <p className="text-zinc-300">{t.practice.needAccount}</p>
         <div className="flex gap-3">
           <Link
             href="/login?redirect=/learning/german"
             className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
           >
-            Log in
+            {t.nav.login}
           </Link>
           <Link
             href="/signup?redirect=/learning/german"
             className="px-5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium transition"
           >
-            Sign up
+            {t.nav.signup}
           </Link>
         </div>
       </div>
     )
   }
 
-  // Practice screen — no placement test anymore, everyone starts at 0 points.
+  if (!stats?.placement_completed) {
+    return (
+      <GermanPlacementTest
+        user={user}
+        onComplete={(result) =>
+          setStats((s) => ({
+            ...s,
+            placement_completed: true,
+            score: result.finalScore,
+            total_answered: result.totalQuestions,
+            total_correct: result.totalCorrect,
+            level_stats: result.levelStats,
+          }))
+        }
+      />
+    )
+  }
+
+  // Practice screen — placement is done.
   return <GermanPractice user={user} stats={stats} onStatsChange={setStats} />
 }

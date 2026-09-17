@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { useLanguage } from "@/context/LanguageContext";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"]; // content difficulty tags, unrelated to badges now
 const BADGES = [
@@ -20,6 +21,7 @@ function getBadge(score) {
 }
 
 export default function GermanPractice({ user, stats, onStatsChange }) {
+  const { t } = useLanguage();
   const [question, setQuestion] = useState(null);
   const [loadingQuestion, setLoadingQuestion] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -143,9 +145,9 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
       const nameMap = Object.fromEntries((people || []).map((p) => [p.user_id, p.display_name]));
       const list = Object.values(latestByUser).map((a) => ({
         ...a,
-        name: a.user_id === user.id ? "You" : nameMap[a.user_id] || "Someone",
+        name: a.user_id === user.id ? t.practice.you : nameMap[a.user_id] || "Someone",
       }));
-      list.sort((a, b) => (a.name === "You" ? -1 : b.name === "You" ? 1 : 0));
+      list.sort((a, b) => (a.name === t.practice.you ? -1 : b.name === t.practice.you ? 1 : 0));
       setCommunityResults(list);
     }
   }
@@ -217,7 +219,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   if (loadingQuestion || !question) {
     return (
       <div className="flex-1 bg-zinc-950 text-zinc-100 flex items-center justify-center">
-        <p className="text-zinc-400">Loading question…</p>
+        <p className="text-zinc-400">{t.practice.loadingQuestion}</p>
       </div>
     );
   }
@@ -233,16 +235,14 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
       <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-zinc-400">
         <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200">
-          {getBadge(stats.score || 0)} · {stats.score || 0} pts
+          {getBadge(stats.score || 0)} · {stats.score || 0} {t.practice.pointsSuffix}
         </span>
-        <span>
-          {stats.total_correct}/{stats.total_answered} correct overall
-        </span>
+        <span>{t.practice.overallCorrect(stats.total_correct, stats.total_answered)}</span>
         <Link href="/learning/german/inbox" className="text-sky-300 hover:text-sky-200 transition">
-          Inbox
+          {t.practice.inbox}
         </Link>
         <Link href="/learning/german/leaderboard" className="text-sky-300 hover:text-sky-200 transition">
-          Leaderboard
+          {t.practice.leaderboard}
         </Link>
       </div>
 
@@ -252,7 +252,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
           onChange={(e) => handleLevelChange(e.target.value)}
           className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-sky-400"
         >
-          <option value="all">All levels</option>
+          <option value="all">{t.practice.allLevels}</option>
           {LEVELS.map((lvl) => (
             <option key={lvl} value={lvl}>
               {lvl}
@@ -265,7 +265,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
           onChange={(e) => handleTopicChange(e.target.value)}
           className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-sky-400"
         >
-          <option value="all">All topics</option>
+          <option value="all">{t.practice.allTopics}</option>
           {topics.map((topic) => (
             <option key={topic} value={topic}>
               {topic}
@@ -275,7 +275,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
       </div>
 
       {practiceLevel !== "all" && (
-        <p className="text-[11px] text-zinc-500">Practicing {practiceLevel} only.</p>
+        <p className="text-[11px] text-zinc-500">{t.practice.practicingOnly(practiceLevel)}</p>
       )}
 
       <p className="text-xl text-center max-w-md">{question.question}</p>
@@ -306,13 +306,13 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
       {answered && (
         <div className="flex flex-col items-center gap-3 w-full max-w-md">
           <p className={selected === question.correct_option ? "text-emerald-300" : "text-rose-300"}>
-            {selected === question.correct_option ? "Correct! +1 point" : "Not quite. −1 point"}
+            {selected === question.correct_option ? t.practice.correctFeedback : t.practice.wrongFeedback}
           </p>
 
           {communityResults.length > 0 && (
             <div className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex flex-col gap-1">
               <p className="text-[10px] text-zinc-500 uppercase tracking-wide">
-                Everyone's answers on this question
+                {t.practice.everyoneAnswers}
               </p>
               {communityResults.map((r) => (
                 <p
@@ -328,7 +328,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
           {friends.length > 0 && (
             <div className="flex items-center gap-2">
               {sendStatus === "sent" ? (
-                <p className="text-xs text-emerald-300">Sent!</p>
+                <p className="text-xs text-emerald-300">{t.practice.sent}</p>
               ) : (
                 <>
                   <select
@@ -336,7 +336,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
                     onChange={(e) => setSelectedFriend(e.target.value)}
                     className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-sky-400"
                   >
-                    <option value="">Send this question to…</option>
+                    <option value="">{t.practice.sendPrompt}</option>
                     {friends.map((f) => (
                       <option key={f.user_id} value={f.user_id}>
                         {f.display_name}
@@ -348,12 +348,12 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
                     disabled={!selectedFriend || sendStatus === "sending"}
                     className="text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-zinc-200 px-3 py-1.5 rounded-lg transition"
                   >
-                    {sendStatus === "sending" ? "Sending…" : "Send"}
+                    {sendStatus === "sending" ? t.practice.sending : t.practice.send}
                   </button>
                 </>
               )}
               {sendStatus === "error" && (
-                <p className="text-xs text-rose-300">Couldn't send — try again.</p>
+                <p className="text-xs text-rose-300">{t.practice.sendError}</p>
               )}
             </div>
           )}
@@ -362,7 +362,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
             onClick={handleNext}
             className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition"
           >
-            Next question
+            {t.practice.nextQuestion}
           </button>
         </div>
       )}

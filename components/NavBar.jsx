@@ -10,6 +10,7 @@ const LANGUAGES = [
   { code: 'en', label: 'English' },
   { code: 'de', label: 'Deutsch' },
   { code: 'ar', label: 'العربية' },
+  { code: 'ru', label: 'Русский' },
 ]
 
 function Logo() {
@@ -19,15 +20,18 @@ function Logo() {
       <path
         d="M14 4 L22 18 L6 18 Z"
         fill="none"
-        stroke="#7dd3fc"
+        stroke="#e0f2fe"
         strokeWidth="1.4"
         strokeLinejoin="round"
       />
-      {/* Dispersed light rays, fading through ocean blues */}
-      <line x1="14" y1="4" x2="19" y2="24" stroke="#0284c7" strokeWidth="1" strokeLinecap="round" />
-      <line x1="14" y1="4" x2="14" y2="25" stroke="#38bdf8" strokeWidth="1" strokeLinecap="round" />
-      <line x1="14" y1="4" x2="9" y2="24" stroke="#67e8f9" strokeWidth="1" strokeLinecap="round" />
-      {/* Wave beneath */}
+      {/* Dispersed rainbow rays */}
+      <line x1="14" y1="4" x2="20.5" y2="25" stroke="#f87171" strokeWidth="1" strokeLinecap="round" />
+      <line x1="14" y1="4" x2="18" y2="25.5" stroke="#fb923c" strokeWidth="1" strokeLinecap="round" />
+      <line x1="14" y1="4" x2="15.5" y2="26" stroke="#facc15" strokeWidth="1" strokeLinecap="round" />
+      <line x1="14" y1="4" x2="12.5" y2="26" stroke="#4ade80" strokeWidth="1" strokeLinecap="round" />
+      <line x1="14" y1="4" x2="10" y2="25.5" stroke="#38bdf8" strokeWidth="1" strokeLinecap="round" />
+      <line x1="14" y1="4" x2="7.5" y2="25" stroke="#a78bfa" strokeWidth="1" strokeLinecap="round" />
+      {/* Wave beneath, keeping the ocean identity */}
       <path
         d="M4 23 Q 7 21 10 23 T 16 23 T 22 23 T 24 22"
         fill="none"

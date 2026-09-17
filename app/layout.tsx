@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Project oceanPRISM",
+  title: "OceanPRISM",
   description: "Games, learning, and more — all in one place.",
 };
 
