@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
-import GermanPractice from '@/components/GermanPractice'
+import TriviaPractice from '@/components/TriviaPractice'
 
-export default function GermanGamePage() {
+export default function TriviaGamePage() {
   const [checked, setChecked] = useState(false)
   const [user, setUser] = useState(null)
   const [stats, setStats] = useState(null)
@@ -27,13 +27,13 @@ export default function GermanGamePage() {
 
     async function loadOrCreateStats() {
       const { data, error } = await supabase
-        .from('german_stats')
+        .from('trivia_stats')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle()
 
       if (error) {
-        console.error('Failed to load german_stats:', error.message)
+        console.error('Failed to load trivia_stats:', error.message)
         setLoadingStats(false)
         return
       }
@@ -43,13 +43,13 @@ export default function GermanGamePage() {
       } else {
         const displayName = user.user_metadata?.full_name || user.email.split('@')[0]
         const { data: created, error: insertError } = await supabase
-          .from('german_stats')
+          .from('trivia_stats')
           .insert({ user_id: user.id, display_name: displayName })
           .select()
           .single()
 
         if (insertError) {
-          console.error('Failed to create german_stats row:', insertError.message)
+          console.error('Failed to create trivia_stats row:', insertError.message)
         } else {
           setStats(created)
         }
@@ -74,13 +74,13 @@ export default function GermanGamePage() {
         <p className="text-zinc-300">You need an account to play this game.</p>
         <div className="flex gap-3">
           <Link
-            href="/login?redirect=/learning/german"
+            href="/login?redirect=/learning/trivia"
             className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
           >
             Log in
           </Link>
           <Link
-            href="/signup?redirect=/learning/german"
+            href="/signup?redirect=/learning/trivia"
             className="px-5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium transition"
           >
             Sign up
@@ -90,6 +90,6 @@ export default function GermanGamePage() {
     )
   }
 
-  // Practice screen — no placement test anymore, everyone starts at 0 points.
-  return <GermanPractice user={user} stats={stats} onStatsChange={setStats} />
+  // Practice screen — no placement test, everyone starts at 0 points.
+  return <TriviaPractice user={user} stats={stats} onStatsChange={setStats} />
 }

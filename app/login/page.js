@@ -30,19 +30,19 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-6">
+    <div className="flex-1 flex items-center justify-center bg-zinc-950 p-6">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-sm bg-zinc-900 rounded-2xl p-8 flex flex-col gap-4 border border-zinc-700"
       >
-        <h1 className="text-xl text-amber-300 font-serif mb-2">Log in</h1>
+        <h1 className="text-xl text-sky-300 font-serif mb-2">Log in</h1>
         <input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email"
-          className="rounded-lg bg-zinc-800 border border-zinc-600 text-zinc-50 p-2 placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
+          className="rounded-lg bg-zinc-800 border border-zinc-600 text-zinc-50 p-2 placeholder:text-zinc-500 focus:outline-none focus:border-sky-400"
         />
         <input
           type="password"
@@ -50,13 +50,13 @@ function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
-          className="rounded-lg bg-zinc-800 border border-zinc-600 text-zinc-50 p-2 placeholder:text-zinc-500 focus:outline-none focus:border-amber-400"
+          className="rounded-lg bg-zinc-800 border border-zinc-600 text-zinc-50 p-2 placeholder:text-zinc-500 focus:outline-none focus:border-sky-400"
         />
         {error && <p className="text-rose-300 text-xs">{error}</p>}
         <button
           type="submit"
           disabled={loading}
-          className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-medium rounded-lg py-2 transition"
+          className="bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-zinc-950 font-medium rounded-lg py-2 transition"
         >
           {loading ? 'Logging in…' : 'Log in'}
         </button>
@@ -64,7 +64,7 @@ function LoginForm() {
           No account yet?{' '}
           <a
             href={`/signup${redirectTo !== '/' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`}
-            className="text-amber-300 underline"
+            className="text-sky-300 underline"
           >
             Sign up
           </a>
@@ -76,7 +76,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+    <Suspense fallback={<div className="flex-1 bg-zinc-950" />}>
       <LoginForm />
     </Suspense>
   )

@@ -20,7 +20,7 @@ function getBadge(score) {
   return badge
 }
 
-export default function GermanLeaderboardPage() {
+export default function TriviaLeaderboardPage() {
   const [checked, setChecked] = useState(false)
   const [user, setUser] = useState(null)
   const [rows, setRows] = useState([])
@@ -36,7 +36,7 @@ export default function GermanLeaderboardPage() {
   useEffect(() => {
     async function load() {
       const { data, error } = await supabase
-        .from('german_stats')
+        .from('trivia_stats')
         .select('user_id, display_name, score, total_answered, total_correct')
 
       if (error) {
@@ -80,7 +80,7 @@ export default function GermanLeaderboardPage() {
     <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center gap-6 p-6">
       <div className="w-full max-w-lg flex items-center justify-between">
         <h1 className="font-serif text-2xl text-sky-300">Leaderboard</h1>
-        <Link href="/learning/german" className="text-xs text-zinc-400 hover:text-sky-300 transition">
+        <Link href="/learning/trivia" className="text-xs text-zinc-400 hover:text-sky-300 transition">
           Back to practice
         </Link>
       </div>

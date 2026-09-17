@@ -31,7 +31,7 @@ function RotatingGreeting() {
 
   return (
     <h1
-      className={`font-serif text-5xl text-amber-300 text-center transition-opacity duration-300 ${
+      className={`font-serif text-5xl text-sky-300 text-center transition-opacity duration-300 ${
         visible ? 'opacity-100' : 'opacity-0'
       }`}
     >
@@ -42,7 +42,7 @@ function RotatingGreeting() {
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center px-6">
+    <div className="flex-1 bg-zinc-950 text-zinc-100 flex items-center justify-center px-6">
       <RotatingGreeting />
     </div>
   )

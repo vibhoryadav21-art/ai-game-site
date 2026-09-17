@@ -25,8 +25,6 @@ const RANKS = [
   { label: "A", value: 14 },
 ];
 
-const GAME_IDS = ["higher_lower", "general"];
-
 function buildDeck() {
   const deck = [];
   for (const suit of SUITS) {
@@ -49,7 +47,6 @@ function shuffle(deck) {
 const STARTING_MONEY = 1000;
 const BASE_BET = 50;
 const GUESSES_PER_STAGE = 10;
-const FEEDBACK_LIMIT = 100;
 const REVEAL_MS = 1200; // how long both cards stay visible side by side
 const SETTLE_MS = 350; // how long the old card takes to fade out afterward
 
@@ -98,13 +95,6 @@ export default function HigherLowerGame() {
     : anonId
     ? { column: "anon_id", value: anonId }
     : null;
-
-  // --- Feedback state ---
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [feedbackGame, setFeedbackGame] = useState("higher_lower");
-  const [feedbackText, setFeedbackText] = useState("");
-  const [feedbackSent, setFeedbackSent] = useState(false);
-  const [feedbackError, setFeedbackError] = useState("");
 
   function resetLocalGame() {
     const fresh = shuffle(buildDeck());
@@ -306,30 +296,6 @@ export default function HigherLowerGame() {
     }
   }
 
-  async function submitFeedback() {
-    const trimmed = feedbackText.trim();
-    if (!trimmed) return;
-    setFeedbackError("");
-
-    const { error } = await supabase.from("feedback").insert({
-      user_id: user?.id ?? null,
-      message: trimmed,
-      game: feedbackGame,
-    });
-
-    if (error) {
-      setFeedbackError("Couldn't send that — try again.");
-      return;
-    }
-
-    setFeedbackSent(true);
-    setFeedbackText("");
-    setTimeout(() => {
-      setFeedbackSent(false);
-      setFeedbackOpen(false);
-    }, 1500);
-  }
-
   if (!current) return null;
 
   const bet = betForStage(stage);
@@ -441,66 +407,6 @@ export default function HigherLowerGame() {
             </button>
           </div>
         )}
-
-        <div className="w-full border-t border-emerald-700/40 pt-4">
-          {!feedbackOpen ? (
-            <button
-              onClick={() => setFeedbackOpen(true)}
-              className="text-xs text-emerald-300 hover:text-amber-300 transition underline underline-offset-2"
-            >
-              {t.game.feedbackPrompt}
-            </button>
-          ) : feedbackSent ? (
-            <p className="text-xs text-amber-300">{t.game.feedbackThanks}</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <select
-                value={feedbackGame}
-                onChange={(e) => setFeedbackGame(e.target.value)}
-                className="w-full rounded-lg bg-emerald-800 border border-emerald-600/50 text-emerald-50 text-xs p-2 focus:outline-none focus:border-amber-400"
-              >
-                {GAME_IDS.map((id) => (
-                  <option key={id} value={id}>
-                    {id === "general" ? t.game.gameGeneral : t.game.gameHigherLower}
-                  </option>
-                ))}
-              </select>
-              <textarea
-                value={feedbackText}
-                onChange={(e) => setFeedbackText(e.target.value.slice(0, FEEDBACK_LIMIT))}
-                maxLength={FEEDBACK_LIMIT}
-                rows={2}
-                placeholder={t.game.feedbackPlaceholder}
-                className="w-full resize-none rounded-lg bg-emerald-800 border border-emerald-600/50 text-emerald-50 text-xs p-2 placeholder:text-emerald-400 focus:outline-none focus:border-amber-400"
-              />
-              {feedbackError && <p className="text-[10px] text-rose-300">{t.game.feedbackError}</p>}
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-emerald-400">
-                  {feedbackText.length}/{FEEDBACK_LIMIT}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setFeedbackOpen(false);
-                      setFeedbackText("");
-                      setFeedbackError("");
-                    }}
-                    className="text-xs text-emerald-400 hover:text-emerald-200 transition px-2"
-                  >
-                    {t.game.cancel}
-                  </button>
-                  <button
-                    onClick={submitFeedback}
-                    disabled={!feedbackText.trim()}
-                    className="text-xs bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-emerald-950 font-medium px-3 py-1 rounded-lg transition"
-                  >
-                    {t.game.send}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

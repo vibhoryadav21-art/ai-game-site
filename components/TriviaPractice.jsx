@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
-const LEVELS = ["A1", "A2", "B1", "B2", "C1"]; // content difficulty tags, unrelated to badges now
+const LEVELS = ["Easy", "Medium", "Hard"]; // content difficulty tags, unrelated to badges now
 const BADGES = [
   { min: 0, name: "Beginner" },
   { min: 30, name: "Challenger" },
@@ -19,7 +19,7 @@ function getBadge(score) {
   return badge;
 }
 
-export default function GermanPractice({ user, stats, onStatsChange }) {
+export default function TriviaPractice({ user, stats, onStatsChange }) {
   const [question, setQuestion] = useState(null);
   const [loadingQuestion, setLoadingQuestion] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -37,7 +37,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
 
   const fetchQuestion = useCallback(async (level, topic, avoidId) => {
     setLoadingQuestion(true);
-    let query = supabase.from("german_questions").select("*");
+    let query = supabase.from("trivia_questions").select("*");
     if (level && level !== "all") query = query.eq("level", level);
     if (topic && topic !== "all") query = query.eq("topic", topic);
     const { data, error } = await query;
@@ -59,7 +59,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   }, []);
 
   const loadTopics = useCallback(async (level) => {
-    let query = supabase.from("german_questions").select("topic");
+    let query = supabase.from("trivia_questions").select("topic");
     if (level && level !== "all") query = query.eq("level", level);
     const { data } = await query;
     const unique = [...new Set((data || []).map((d) => d.topic).filter(Boolean))].sort((a, b) =>
@@ -86,7 +86,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   useEffect(() => {
     async function loadFriends() {
       const { data, error } = await supabase
-        .from("german_stats")
+        .from("trivia_stats")
         .select("user_id, display_name")
         .neq("user_id", user.id);
       if (!error && data) setFriends(data);
@@ -117,7 +117,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
 
     // Log this attempt, then pull everyone's latest attempt on this exact
     // question so the "how did others do" panel can show up immediately.
-    await supabase.from("question_attempts").insert({
+    await supabase.from("trivia_attempts").insert({
       user_id: user.id,
       question_id: question.id,
       selected_option: optionKey,
@@ -125,7 +125,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     });
 
     const { data: attempts } = await supabase
-      .from("question_attempts")
+      .from("trivia_attempts")
       .select("user_id, selected_option, correct, answered_at")
       .eq("question_id", question.id)
       .order("answered_at", { ascending: false });
@@ -137,7 +137,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
       }
       const userIds = Object.keys(latestByUser);
       const { data: people } = await supabase
-        .from("german_stats")
+        .from("trivia_stats")
         .select("user_id, display_name")
         .in("user_id", userIds);
       const nameMap = Object.fromEntries((people || []).map((p) => [p.user_id, p.display_name]));
@@ -154,7 +154,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     if (!selectedFriend || !question) return;
     setSendStatus("sending");
 
-    const { error } = await supabase.from("sent_questions").insert({
+    const { error } = await supabase.from("sent_trivia_questions").insert({
       question_id: question.id,
       sender_id: user.id,
       receiver_id: selectedFriend,
@@ -200,7 +200,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     onStatsChange(updatedStats);
 
     await supabase
-      .from("german_stats")
+      .from("trivia_stats")
       .update({
         score: newScore,
         total_answered: totalAnswered,
@@ -238,10 +238,10 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
         <span>
           {stats.total_correct}/{stats.total_answered} correct overall
         </span>
-        <Link href="/learning/german/inbox" className="text-sky-300 hover:text-sky-200 transition">
+        <Link href="/learning/trivia/inbox" className="text-sky-300 hover:text-sky-200 transition">
           Inbox
         </Link>
-        <Link href="/learning/german/leaderboard" className="text-sky-300 hover:text-sky-200 transition">
+        <Link href="/learning/trivia/leaderboard" className="text-sky-300 hover:text-sky-200 transition">
           Leaderboard
         </Link>
       </div>

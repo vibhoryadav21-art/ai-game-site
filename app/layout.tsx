@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import NavBar from "@/components/NavBar";
+import FeedbackWidget from "@/components/FeedbackWidget";
 import { LanguageProvider } from "@/context/LanguageContext";
 
 const geistSans = Geist({
@@ -15,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kino's Hub",
+  title: "Project oceanPRISM",
   description: "Games, learning, and more — all in one place.",
 };
 
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <LanguageProvider>
           <NavBar />
           {children}
+          <FeedbackWidget />
         </LanguageProvider>
       </body>
     </html>

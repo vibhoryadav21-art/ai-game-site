@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 
-export default function GermanInboxPage() {
+export default function TriviaInboxPage() {
   const [checked, setChecked] = useState(false)
   const [user, setUser] = useState(null)
   const [items, setItems] = useState([])
@@ -21,7 +21,7 @@ export default function GermanInboxPage() {
     setLoading(true)
 
     const { data: sent, error } = await supabase
-      .from('sent_questions')
+      .from('sent_trivia_questions')
       .select('*')
       .eq('receiver_id', userId)
       .order('created_at', { ascending: false })
@@ -36,8 +36,8 @@ export default function GermanInboxPage() {
     const senderIds = [...new Set(sent.map((s) => s.sender_id))]
 
     const [{ data: questions }, { data: senders }] = await Promise.all([
-      supabase.from('german_questions').select('*').in('id', questionIds),
-      supabase.from('german_stats').select('user_id, display_name').in('user_id', senderIds),
+      supabase.from('trivia_questions').select('*').in('id', questionIds),
+      supabase.from('trivia_stats').select('user_id, display_name').in('user_id', senderIds),
     ])
 
     const questionMap = Object.fromEntries((questions || []).map((q) => [q.id, q]))
@@ -61,7 +61,7 @@ export default function GermanInboxPage() {
     const receiverCorrect = selected === item.question.correct_option
 
     const { error } = await supabase
-      .from('sent_questions')
+      .from('sent_trivia_questions')
       .update({
         receiver_answer: selected,
         receiver_correct: receiverCorrect,
@@ -76,7 +76,7 @@ export default function GermanInboxPage() {
 
     // Also count it toward this user's overall stats.
     const { data: stats } = await supabase
-      .from('german_stats')
+      .from('trivia_stats')
       .select('*')
       .eq('user_id', user.id)
       .single()
@@ -91,7 +91,7 @@ export default function GermanInboxPage() {
       }
       const newScore = Math.max(0, (stats.score || 0) + (receiverCorrect ? 1 : -1))
       await supabase
-        .from('german_stats')
+        .from('trivia_stats')
         .update({
           score: newScore,
           total_answered: stats.total_answered + 1,
@@ -131,7 +131,7 @@ export default function GermanInboxPage() {
     <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center gap-6 p-6">
       <div className="w-full max-w-lg flex items-center justify-between">
         <h1 className="font-serif text-2xl text-sky-300">Sent to you</h1>
-        <Link href="/learning/german" className="text-xs text-zinc-400 hover:text-sky-300 transition">
+        <Link href="/learning/trivia" className="text-xs text-zinc-400 hover:text-sky-300 transition">
           Back to practice
         </Link>
       </div>
