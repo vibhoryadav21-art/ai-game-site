@@ -30,7 +30,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center bg-zinc-950 p-6">
+    <div className="flex-1 flex items-center justify-center bg-black p-6">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-sm bg-zinc-900 rounded-2xl p-8 flex flex-col gap-4 border border-zinc-700"
@@ -76,7 +76,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="flex-1 bg-zinc-950" />}>
+    <Suspense fallback={<div className="flex-1 bg-black" />}>
       <LoginForm />
     </Suspense>
   )

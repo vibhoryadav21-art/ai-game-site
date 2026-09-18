@@ -7,7 +7,7 @@ export default function GamesHubPage() {
   const { t } = useLanguage()
 
   return (
-    <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center gap-8 px-6 py-16">
+    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-8 px-6 py-16">
       <h1 className="font-serif text-3xl text-sky-300">{t.games.title}</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">

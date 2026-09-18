@@ -103,7 +103,7 @@ export default function GermanLevelTest({ user, stats, onPassed }) {
 
   if (phase === "choose") {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
+      <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
         <h1 className="font-serif text-2xl text-sky-300">Take a level test</h1>
         <p className="text-zinc-400 text-sm text-center max-w-sm">
           Up to {TEST_LENGTH} questions from one level. Score {Math.ceil(TEST_LENGTH * PASS_RATIO)}/
@@ -133,7 +133,7 @@ export default function GermanLevelTest({ user, stats, onPassed }) {
 
   if (phase === "result") {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
+      <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
         <p className={`font-serif text-4xl ${result.passed ? "text-emerald-300" : "text-rose-300"}`}>
           {result.passed ? "Passed!" : "Not this time"}
         </p>
@@ -166,7 +166,7 @@ export default function GermanLevelTest({ user, stats, onPassed }) {
   ];
 
   return (
-    <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-8 p-6">
+    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-8 p-6">
       <p className="text-zinc-500 text-xs uppercase tracking-wide">
         {chosenLevel} test — question {index + 1} of {questions.length}
       </p>

@@ -38,7 +38,7 @@ export default function GermanLevelTestPage() {
 
   if (!checked || loadingStats) {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex items-center justify-center">
+      <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
         <p className="text-zinc-400">Loading…</p>
       </div>
     )
@@ -46,7 +46,7 @@ export default function GermanLevelTestPage() {
 
   if (!user) {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
+      <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
         <p className="text-zinc-300">Log in to take a level test.</p>
         <Link
           href="/login?redirect=/learning/german/level-test"

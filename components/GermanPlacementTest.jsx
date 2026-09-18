@@ -132,7 +132,7 @@ export default function GermanPlacementTest({ user, onComplete }) {
 
   if (error) {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex items-center justify-center p-6">
+      <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center p-6">
         <p className="text-rose-300 text-center max-w-sm">{error}</p>
       </div>
     );
@@ -140,7 +140,7 @@ export default function GermanPlacementTest({ user, onComplete }) {
 
   if (phase === "loading") {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex items-center justify-center">
+      <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
         <p className="text-zinc-400">Preparing your placement test…</p>
       </div>
     );
@@ -148,7 +148,7 @@ export default function GermanPlacementTest({ user, onComplete }) {
 
   if (phase === "result") {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
+      <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
         <p className="text-zinc-400 text-sm uppercase tracking-wide">Placement complete</p>
         <p className="font-serif text-5xl text-sky-300">{result.determinedLevel}</p>
         <p className="text-zinc-400">
@@ -184,7 +184,7 @@ export default function GermanPlacementTest({ user, onComplete }) {
   ];
 
   return (
-    <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-8 p-6">
+    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-8 p-6">
       <p className="text-zinc-500 text-xs uppercase tracking-wide">
         Question {index + 1} of {questions.length}
       </p>

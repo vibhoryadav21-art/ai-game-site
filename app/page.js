@@ -42,7 +42,7 @@ function RotatingGreeting() {
 
 export default function HomePage() {
   return (
-    <div className="flex-1 bg-zinc-950 text-zinc-100 flex items-center justify-center px-6">
+    <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center px-6">
       <RotatingGreeting />
     </div>
   )

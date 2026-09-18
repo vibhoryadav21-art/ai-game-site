@@ -210,7 +210,7 @@ export default function TriviaLeaderboardPage() {
 
   if (!checked || loading) {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex items-center justify-center">
+      <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
         <p className="text-zinc-400">Loading…</p>
       </div>
     )
@@ -218,14 +218,14 @@ export default function TriviaLeaderboardPage() {
 
   if (!user) {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex items-center justify-center">
+      <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
         <p className="text-zinc-300">Log in to see crews and leaderboards.</p>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center gap-6 p-6">
+    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-6 p-6">
       <div className="w-full max-w-lg flex items-center justify-between">
         <h1 className="font-serif text-2xl text-sky-300">Crews</h1>
         <Link href="/learning/trivia" className="text-xs text-zinc-400 hover:text-sky-300 transition">

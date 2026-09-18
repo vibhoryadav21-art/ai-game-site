@@ -87,14 +87,31 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
 
   useEffect(() => {
     async function loadFriends() {
+      if (!stats.default_crew_id) {
+        setFriends([]);
+        return;
+      }
+      const { data: members } = await supabase
+        .from("crew_members")
+        .select("user_id")
+        .eq("crew_id", stats.default_crew_id)
+        .eq("status", "member")
+        .neq("user_id", user.id);
+
+      const memberIds = (members || []).map((m) => m.user_id);
+      if (memberIds.length === 0) {
+        setFriends([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("german_stats")
         .select("user_id, display_name")
-        .neq("user_id", user.id);
+        .in("user_id", memberIds);
       if (!error && data) setFriends(data);
     }
     loadFriends();
-  }, [user.id]);
+  }, [user.id, stats.default_crew_id]);
 
   function handleLevelChange(newLevel) {
     setPracticeLevel(newLevel);
@@ -234,7 +251,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
 
   if (loadingQuestion || !question) {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex items-center justify-center">
+      <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
         <p className="text-zinc-400">{t.practice.loadingQuestion}</p>
       </div>
     );
@@ -248,7 +265,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   ];
 
   return (
-    <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
+    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
       <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-zinc-400">
         <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200">
           {getBadge(stats.score || 0)} · {stats.score || 0} {t.practice.pointsSuffix}

@@ -64,7 +64,7 @@ export default function TriviaGamePage() {
 
   if (!checked || loadingStats) {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex items-center justify-center">
+      <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
         <p className="text-zinc-400">{t.practice.loading}</p>
       </div>
     )
@@ -72,7 +72,7 @@ export default function TriviaGamePage() {
 
   if (!user) {
     return (
-      <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
+      <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
         <p className="text-zinc-300">{t.practice.needAccount}</p>
         <div className="flex gap-3">
           <Link

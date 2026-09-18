@@ -34,7 +34,7 @@ function SignUpForm() {
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center bg-zinc-950 p-6">
+    <div className="flex-1 flex items-center justify-center bg-black p-6">
       <div className="w-full max-w-sm bg-zinc-900 rounded-2xl p-8 border border-zinc-700">
         <h1 className="text-xl text-sky-300 font-serif mb-6">Create an account</h1>
 
@@ -95,7 +95,7 @@ function SignUpForm() {
 
 export default function SignUpPage() {
   return (
-    <Suspense fallback={<div className="flex-1 bg-zinc-950" />}>
+    <Suspense fallback={<div className="flex-1 bg-black" />}>
       <SignUpForm />
     </Suspense>
   )
