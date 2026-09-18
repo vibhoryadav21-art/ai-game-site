@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
-const QUESTIONS_PER_LEVEL = 2;
+const QUESTIONS_PER_LEVEL = 4; // 5 levels × 4 = 20
 
 const BADGES = [
   { min: 0, name: "Beginner" },
@@ -83,14 +83,29 @@ export default function GermanPlacementTest({ user, onComplete }) {
       if (a.correct) levelStats[a.level].correct += 1;
     });
 
+    // Work up through the levels in order — you're placed at the highest
+    // one where you got at least half right, stopping at the first miss.
+    let determinedLevel = "A1";
+    for (const level of LEVELS) {
+      const { correct, total } = levelStats[level];
+      if (total > 0 && correct / total >= 0.5) {
+        determinedLevel = level;
+      } else {
+        break;
+      }
+    }
+
     const totalCorrect = finalAnswers.filter((a) => a.correct).length;
     const totalWrong = finalAnswers.length - totalCorrect;
     // Same scoring rule as regular practice: +1 correct, -1 wrong, floor at 0.
+    // Note this alone won't get anyone past "Beginner" — the CEFR level
+    // above is the real placement result; the badge is just a bonus.
     const finalScore = Math.max(0, totalCorrect - totalWrong);
 
     const { error } = await supabase
       .from("german_stats")
       .update({
+        current_level: determinedLevel,
         score: finalScore,
         placement_completed: true,
         total_answered: finalAnswers.length,
@@ -105,7 +120,13 @@ export default function GermanPlacementTest({ user, onComplete }) {
       return;
     }
 
-    setResult({ finalScore, levelStats, totalCorrect, totalQuestions: finalAnswers.length });
+    setResult({
+      determinedLevel,
+      finalScore,
+      levelStats,
+      totalCorrect,
+      totalQuestions: finalAnswers.length,
+    });
     setPhase("result");
   }
 
@@ -129,9 +150,10 @@ export default function GermanPlacementTest({ user, onComplete }) {
     return (
       <div className="flex-1 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
         <p className="text-zinc-400 text-sm uppercase tracking-wide">Placement complete</p>
-        <p className="font-serif text-5xl text-sky-300">{getBadge(result.finalScore)}</p>
+        <p className="font-serif text-5xl text-sky-300">{result.determinedLevel}</p>
         <p className="text-zinc-400">
-          {result.totalCorrect}/{result.totalQuestions} correct — {result.finalScore} points to start
+          {result.totalCorrect}/{result.totalQuestions} correct — starting badge: {getBadge(result.finalScore)} (
+          {result.finalScore} pts)
         </p>
         <div className="grid grid-cols-5 gap-3 text-center text-xs">
           {LEVELS.map((level) => (

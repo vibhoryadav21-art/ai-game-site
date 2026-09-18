@@ -46,9 +46,10 @@ export default function GermanLeaderboardPage() {
   const loadCrewData = useCallback(async (userId) => {
     setLoading(true)
 
-    const [{ data: allCrews }, { data: myMemberships }] = await Promise.all([
+    const [{ data: allCrews }, { data: myMemberships }, { data: myStats }] = await Promise.all([
       supabase.from('crews').select('*'),
       supabase.from('crew_members').select('*').eq('user_id', userId),
+      supabase.from('german_stats').select('default_crew_id').eq('user_id', userId).single(),
     ])
 
     const memberOf = (myMemberships || []).filter((m) => m.status === 'member')
@@ -63,6 +64,11 @@ export default function GermanLeaderboardPage() {
     setBrowseCrews(
       (allCrews || []).filter((c) => !myCrewIds.has(c.id) && !pendingCrewIds.has(c.id))
     )
+
+    const savedDefault = myStats?.default_crew_id
+    if (savedDefault && myCrewIds.has(savedDefault)) {
+      setSelectedCrewId(savedDefault)
+    }
 
     // Pending requests for crews I admin.
     const myAdminCrewIds = (allCrews || []).filter((c) => c.admin_id === userId).map((c) => c.id)
@@ -139,6 +145,14 @@ export default function GermanLeaderboardPage() {
     loadLeaderboardForCrew(selectedCrewId)
   }, [selectedCrewId, loadLeaderboardForCrew])
 
+  async function selectCrew(crewId) {
+    setSelectedCrewId(crewId)
+    await supabase
+      .from('german_stats')
+      .update({ default_crew_id: crewId || null })
+      .eq('user_id', user.id)
+  }
+
   async function createCrew() {
     setFormError('')
     const name = newCrewName.trim()
@@ -162,6 +176,9 @@ export default function GermanLeaderboardPage() {
     await supabase
       .from('crew_members')
       .insert({ crew_id: crew.id, user_id: user.id, status: 'member', decided_at: new Date().toISOString() })
+
+    await supabase.from('german_stats').update({ default_crew_id: crew.id }).eq('user_id', user.id)
+    setSelectedCrewId(crew.id)
 
     setNewCrewName('')
     loadCrewData(user.id)
@@ -253,7 +270,7 @@ export default function GermanLeaderboardPage() {
         ) : (
           <select
             value={selectedCrewId}
-            onChange={(e) => setSelectedCrewId(e.target.value)}
+            onChange={(e) => selectCrew(e.target.value)}
             className="bg-zinc-800 border border-zinc-600 text-zinc-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-sky-400"
           >
             <option value="">Select a crew to view its leaderboard…</option>

@@ -101,6 +101,7 @@ export default function GermanGamePage() {
           setStats((s) => ({
             ...s,
             placement_completed: true,
+            current_level: result.determinedLevel,
             score: result.finalScore,
             total_answered: result.totalQuestions,
             total_correct: result.totalCorrect,

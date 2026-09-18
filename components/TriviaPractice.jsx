@@ -138,10 +138,26 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
       correct,
     });
 
+    // Only show answers from people in your default crew — pulling every
+    // registered user gets unwieldy once the group grows past a handful.
+    if (!stats.default_crew_id) {
+      return;
+    }
+
+    const { data: crewMembers } = await supabase
+      .from("crew_members")
+      .select("user_id")
+      .eq("crew_id", stats.default_crew_id)
+      .eq("status", "member");
+
+    const allowedUserIds = (crewMembers || []).map((m) => m.user_id);
+    if (allowedUserIds.length === 0) return;
+
     const { data: attempts } = await supabase
       .from("trivia_attempts")
       .select("user_id, selected_option, correct, answered_at")
       .eq("question_id", question.id)
+      .in("user_id", allowedUserIds)
       .order("answered_at", { ascending: false });
 
     if (attempts) {
@@ -343,6 +359,15 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
                 </p>
               ))}
             </div>
+          )}
+
+          {!stats.default_crew_id && (
+            <p className="text-[10px] text-zinc-500">
+              <Link href="/learning/trivia/leaderboard" className="text-sky-300 hover:text-sky-200 transition">
+                Pick a crew
+              </Link>{" "}
+              to see how your friends answer these.
+            </p>
           )}
 
           {friends.length > 0 && (
