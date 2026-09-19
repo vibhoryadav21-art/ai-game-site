@@ -36,6 +36,7 @@ function SignUpForm() {
   return (
     <div className="flex-1 flex items-center justify-center bg-black p-6">
       <div className="w-full max-w-sm bg-zinc-900 rounded-2xl p-8 border border-zinc-700">
+        <img src="/logo-auszeit-red.png" alt="auszeit." className="h-8 w-auto mx-auto mb-4" />
         <h1 className="text-xl text-sky-300 font-serif mb-6">Create an account</h1>
 
         {done ? (

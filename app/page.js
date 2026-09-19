@@ -2,19 +2,17 @@
 
 import { useEffect, useState } from 'react'
 
-// Cycles through greetings regardless of the site's selected language —
-// a "welcome, wherever you're from" gesture, not tied to the language switcher.
-const GREETINGS = [
-  'Welcome',
-  'Willkommen',
-  'أهلاً وسهلاً',
-  'Bienvenue',
-  'Bienvenido',
-  '欢迎',
-  'स्वागत है',
+// Each variant pairs one logo color with the word that represents it.
+const VARIANTS = [
+  { logo: '/logo-auszeit-blue.png', word: 'Entertainment.' },
+  { logo: '/logo-auszeit-purple.png', word: 'Learning.' },
+  { logo: '/logo-auszeit-orange.png', word: 'Socializing.' },
 ]
 
-function RotatingGreeting() {
+const INTERVAL_MS = 3500
+const FADE_MS = 300
+
+export default function HomePage() {
   const [index, setIndex] = useState(0)
   const [visible, setVisible] = useState(true)
 
@@ -22,28 +20,32 @@ function RotatingGreeting() {
     const interval = setInterval(() => {
       setVisible(false)
       setTimeout(() => {
-        setIndex((i) => (i + 1) % GREETINGS.length)
+        setIndex((i) => (i + 1) % VARIANTS.length)
         setVisible(true)
-      }, 300)
-    }, 2200)
+      }, FADE_MS)
+    }, INTERVAL_MS)
     return () => clearInterval(interval)
   }, [])
 
-  return (
-    <h1
-      className={`font-serif text-5xl text-sky-300 text-center transition-opacity duration-300 ${
-        visible ? 'opacity-100' : 'opacity-0'
-      }`}
-    >
-      {GREETINGS[index]}
-    </h1>
-  )
-}
+  const current = VARIANTS[index]
 
-export default function HomePage() {
   return (
-    <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center px-6">
-      <RotatingGreeting />
+    <div className="flex-1 bg-black flex flex-col items-center justify-center gap-5 px-6">
+      <img
+        src={current.logo}
+        alt="auszeit."
+        className={`h-16 md:h-20 w-auto transition-opacity duration-300 ${
+          visible ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
+      <p className="text-zinc-400 text-sm tracking-wide">own your time!</p>
+      <p
+        className={`text-lg text-zinc-200 transition-opacity duration-300 ${
+          visible ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        {current.word}
+      </p>
     </div>
   )
 }

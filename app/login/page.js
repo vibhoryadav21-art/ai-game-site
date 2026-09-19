@@ -35,6 +35,7 @@ function LoginForm() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm bg-zinc-900 rounded-2xl p-8 flex flex-col gap-4 border border-zinc-700"
       >
+        <img src="/logo-auszeit-red.png" alt="auszeit." className="h-8 w-auto mx-auto mb-4" />
         <h1 className="text-xl text-sky-300 font-serif mb-2">Log in</h1>
         <input
           type="email"
