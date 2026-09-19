@@ -34,6 +34,10 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
   const [explanation, setExplanation] = useState("");
   const [explanationLoading, setExplanationLoading] = useState(false);
   const [explanationError, setExplanationError] = useState("");
+  const [poolSize, setPoolSize] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState("");
+  const [generateSuccess, setGenerateSuccess] = useState("");
 
   // "all" mixes questions from every level; picking a specific level
   // switches into manual review mode, which doesn't affect leveling.
@@ -59,9 +63,12 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
     if (!data || data.length === 0) {
       setQuestion(null);
       setNoQuestionsAvailable(true);
+      setPoolSize(0);
       setLoadingQuestion(false);
       return;
     }
+
+    setPoolSize(data.length);
 
     let pool = data;
     if (data.length > 1 && avoidId) {
@@ -90,6 +97,8 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
     setCommunityResults([]);
     setExplanation("");
     setExplanationError("");
+    setGenerateSuccess("");
+    setGenerateError("");
   }
 
   // Runs on mount, and again any time the site's language changes — trivia
@@ -199,6 +208,34 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
       }));
       list.sort((a, b) => (a.name === t.practice.you ? -1 : b.name === t.practice.you ? 1 : 0));
       setCommunityResults(list);
+    }
+  }
+
+  async function generateMoreQuestions() {
+    setGenerating(true);
+    setGenerateError("");
+    setGenerateSuccess("");
+    try {
+      const res = await fetch("/api/ai/generate-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          table: "trivia_questions",
+          level: practiceLevel,
+          topic: practiceTopic !== "all" ? practiceTopic : undefined,
+          count: 10,
+          language,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setGenerateSuccess(`Added ${data.insertedCount} new questions.`);
+      loadTopics(practiceLevel);
+      fetchQuestion(practiceLevel, practiceTopic, question?.id);
+    } catch (err) {
+      setGenerateError("Couldn't generate questions — try again.");
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -376,6 +413,25 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
 
       {practiceLevel !== "all" && (
         <p className="text-[11px] text-zinc-500">{t.practice.practicingOnly(practiceLevel)}</p>
+      )}
+
+      {practiceLevel !== "all" && poolSize !== null && poolSize < 5 && (
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-[11px] text-amber-400">
+            Only {poolSize} question{poolSize === 1 ? "" : "s"} available for this filter.
+          </p>
+          {!generating && !generateSuccess && (
+            <button
+              onClick={generateMoreQuestions}
+              className="text-xs text-sky-300 hover:text-sky-200 underline underline-offset-2 transition"
+            >
+              Generate 10 more
+            </button>
+          )}
+          {generating && <p className="text-xs text-zinc-500">Generating…</p>}
+          {generateSuccess && <p className="text-xs text-emerald-300">{generateSuccess}</p>}
+          {generateError && <p className="text-xs text-rose-300">{generateError}</p>}
+        </div>
       )}
 
       <p className="text-xl text-center max-w-md">{question.question}</p>
