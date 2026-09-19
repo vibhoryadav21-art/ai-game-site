@@ -42,6 +42,8 @@ Respond with ONLY a JSON object, no other text, no markdown code fences, in exac
 
 Rules:
 - Use ___ for the blank in "question" where relevant.
+- CRITICAL: every question must have exactly ONE defensibly correct answer, uniquely determined by the sentence itself — not just grammatically possible, but the only sensible answer given the full context. Before finalizing each question, check: could a careful learner reasonably defend a different option using only the sentence given? If yes, rewrite it.
+- For vocabulary topics (numbers, colors, days, objects, etc.), never write a fill-in-the-blank sentence where several vocabulary words could fit equally well — for example "Er sitzt auf Platz ___" fits any number and has no single correct answer. Instead, either (a) reference a specific fact the learner must know ("Wie viele Tage hat eine Woche?"), (b) use a math or logic clue ("Fünf plus drei ist ___"), or (c) ask for a direct translation ("Wie sagt man 'seven' auf Deutsch?").
 - Exactly one option is correct; correct_option is "a", "b", "c", or "d".
 - Distractors must be plausible but clearly wrong to a careful learner at this level.
 - Vary the sentence patterns and topics — don't repeat the same structure more than twice.
