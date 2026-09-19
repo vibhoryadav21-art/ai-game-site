@@ -31,6 +31,9 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
   const [selectedFriend, setSelectedFriend] = useState("");
   const [sendStatus, setSendStatus] = useState("idle"); // idle | sending | sent | error
   const [communityResults, setCommunityResults] = useState([]);
+  const [explanation, setExplanation] = useState("");
+  const [explanationLoading, setExplanationLoading] = useState(false);
+  const [explanationError, setExplanationError] = useState("");
 
   // "all" mixes questions from every level; picking a specific level
   // switches into manual review mode, which doesn't affect leveling.
@@ -85,6 +88,8 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
     setSelectedFriend("");
     setSendStatus("idle");
     setCommunityResults([]);
+    setExplanation("");
+    setExplanationError("");
   }
 
   // Runs on mount, and again any time the site's language changes — trivia
@@ -194,6 +199,48 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
       }));
       list.sort((a, b) => (a.name === t.practice.you ? -1 : b.name === t.practice.you ? 1 : 0));
       setCommunityResults(list);
+    }
+  }
+
+  async function handleExplain() {
+    const cached = question.explanations?.[language];
+    if (cached) {
+      setExplanation(cached);
+      return;
+    }
+
+    setExplanationLoading(true);
+    setExplanationError("");
+    try {
+      const res = await fetch("/api/ai/explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          table: "trivia_questions",
+          questionId: question.id,
+          question: question.question,
+          options: {
+            a: question.option_a,
+            b: question.option_b,
+            c: question.option_c,
+            d: question.option_d,
+          },
+          correctOption: question.correct_option,
+          userOption: selected,
+          language,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setExplanation(data.explanation);
+      setQuestion((q) => ({
+        ...q,
+        explanations: { ...(q.explanations || {}), [language]: data.explanation },
+      }));
+    } catch (err) {
+      setExplanationError("Couldn't get an explanation — try again.");
+    } finally {
+      setExplanationLoading(false);
     }
   }
 
@@ -361,6 +408,26 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
           <p className={selected === question.correct_option ? "text-emerald-300" : "text-rose-300"}>
             {selected === question.correct_option ? t.practice.correctFeedback : t.practice.wrongFeedback}
           </p>
+
+          {selected !== question.correct_option && (
+            <div className="w-full flex flex-col gap-2">
+              {!explanation && !explanationLoading && (
+                <button
+                  onClick={handleExplain}
+                  className="text-xs text-sky-300 hover:text-sky-200 underline underline-offset-2 transition self-start"
+                >
+                  Explain
+                </button>
+              )}
+              {explanationLoading && <p className="text-xs text-zinc-500">Thinking…</p>}
+              {explanation && (
+                <div className="w-full bg-zinc-900 border border-sky-900/50 rounded-xl p-3">
+                  <p className="text-xs text-zinc-300 leading-relaxed">{explanation}</p>
+                </div>
+              )}
+              {explanationError && <p className="text-xs text-rose-300">{explanationError}</p>}
+            </div>
+          )}
 
           {communityResults.length > 0 && (
             <div className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex flex-col gap-1">
