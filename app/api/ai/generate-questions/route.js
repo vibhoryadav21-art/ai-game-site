@@ -17,7 +17,7 @@ const TRIVIA_LEVEL_FOCUS = {
 const LANGUAGE_NAMES = { en: 'English', de: 'German', ar: 'Arabic', ru: 'Russian' }
 
 export async function POST(request) {
-  const { table, level, topic, count = 10, language = 'en' } = await request.json()
+  const { table, level, topic, count = 5, language = 'en' } = await request.json()
 
   if (!['german_questions', 'trivia_questions'].includes(table)) {
     return Response.json({ error: 'Invalid table' }, { status: 400 })
@@ -59,6 +59,7 @@ Rules:
       model: 'qwen/qwen3.8-27b',
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' },
+      max_tokens: 900,
     }),
   })
 

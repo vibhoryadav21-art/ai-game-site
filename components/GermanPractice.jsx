@@ -211,7 +211,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
           table: "german_questions",
           level: practiceLevel,
           topic: practiceTopic !== "all" ? practiceTopic : undefined,
-          count: 10,
+          count: 5,
         }),
       });
       const data = await res.json();
@@ -413,7 +413,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
               onClick={generateMoreQuestions}
               className="text-xs text-sky-300 hover:text-sky-200 underline underline-offset-2 transition"
             >
-              Generate 10 more
+              Generate 5 more
             </button>
           )}
           {generating && <p className="text-xs text-zinc-500">Generating…</p>}

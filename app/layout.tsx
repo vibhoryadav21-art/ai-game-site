@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OceanPRISM",
-  description: "Games, learning, and more — all in one place.",
+  title: "auszeit.",
+  description: "Learning, entertainment, and socialising — own your time.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

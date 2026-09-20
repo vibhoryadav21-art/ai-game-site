@@ -26,6 +26,7 @@ Respond with ONLY a JSON object, no other text, no markdown code fences, in exac
       model: 'qwen/qwen3.8-27b',
       messages: [{ role: 'user', content: gradingPrompt }],
       response_format: { type: 'json_object' },
+      max_tokens: 300,
     }),
   })
 

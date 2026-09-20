@@ -33,6 +33,7 @@ Student's answer: ${userOption ? `${userOption}) ${options[userOption]}` : '(ski
     body: JSON.stringify({
       model: 'qwen/qwen3.8-27b',
       messages: [{ role: 'user', content: prompt }],
+      max_tokens: 300,
     }),
   })
 
