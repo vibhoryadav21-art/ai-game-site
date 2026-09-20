@@ -366,6 +366,9 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
         <Link href="/learning/german/level-test" className="text-sky-300 hover:text-sky-200 transition">
           Take a level test
         </Link>
+        <Link href="/learning/german/writing" className="text-sky-300 hover:text-sky-200 transition">
+          Practice writing
+        </Link>
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
