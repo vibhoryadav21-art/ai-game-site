@@ -381,6 +381,9 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
         <Link href="/learning/trivia/leaderboard" className="text-sky-300 hover:text-sky-200 transition">
           {t.practice.leaderboard}
         </Link>
+        <Link href="/learning/trivia/challenges" className="text-sky-300 hover:text-sky-200 transition">
+          Challenges
+        </Link>
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
