@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { useLanguage } from '@/context/LanguageContext'
+import Sidebar from './Sidebar'
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -14,20 +15,40 @@ const LANGUAGES = [
 ]
 
 function Logo() {
+  return <img src="/logo-az.png" alt="auszeit." className="h-6 w-auto" />
+}
+
+function MenuButton({ onClick }) {
   return (
-    <img
-      src="/logo-az.png"
-      alt="auszeit."
-      className="h-6 w-auto"
-    />
+    <button
+      onClick={onClick}
+      aria-label="Open menu"
+      className="text-blue-200 hover:text-sky-300 transition p-1"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-6 w-6"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M4 6h16M4 12h16M4 18h16"
+        />
+      </svg>
+    </button>
   )
 }
 
 export default function NavBar() {
   const [user, setUser] = useState(null)
   const [checked, setChecked] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const router = useRouter()
-  const { language, setLanguage, t } = useLanguage()
+  const { language, setLanguage } = useLanguage()
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -49,21 +70,14 @@ export default function NavBar() {
   }
 
   return (
-    <nav className="w-full bg-black border-b border-zinc-800 px-6 py-3 flex items-center justify-between">
-      <Link href="/" className="flex items-center">
-        <Logo />
-      </Link>
-
-      <div className="flex items-center gap-4 text-sm">
-        <Link href="/about" className="text-blue-200 hover:text-sky-300 transition">
-          {t.nav.about}
-        </Link>
-        <Link href="/games" className="text-blue-200 hover:text-sky-300 transition">
-          {t.nav.games}
-        </Link>
-        <Link href="/learning" className="text-blue-200 hover:text-sky-300 transition">
-          {t.nav.learning}
-        </Link>
+    <>
+      <nav className="w-full bg-black border-b border-zinc-800 px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <MenuButton onClick={() => setSidebarOpen(true)} />
+          <Link href="/" className="flex items-center">
+            <Logo />
+          </Link>
+        </div>
 
         <select
           value={language}
@@ -77,31 +91,15 @@ export default function NavBar() {
             </option>
           ))}
         </select>
+      </nav>
 
-        {!checked ? null : user ? (
-          <>
-            <span className="text-blue-300 hidden sm:inline">{user.email}</span>
-            <button
-              onClick={handleLogout}
-              className="text-blue-200 hover:text-sky-300 transition"
-            >
-              {t.nav.logout}
-            </button>
-          </>
-        ) : (
-          <>
-            <Link href="/login" className="text-blue-200 hover:text-sky-300 transition">
-              {t.nav.login}
-            </Link>
-            <Link
-              href="/signup"
-              className="bg-sky-500 hover:bg-sky-400 text-blue-950 font-medium px-3 py-1.5 rounded-lg transition"
-            >
-              {t.nav.signup}
-            </Link>
-          </>
-        )}
-      </div>
-    </nav>
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        user={user}
+        checked={checked}
+        onLogout={handleLogout}
+      />
+    </>
   )
 }
