@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
@@ -47,6 +47,8 @@ export default function NavBar() {
   const [user, setUser] = useState(null)
   const [checked, setChecked] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [navHeight, setNavHeight] = useState(0)
+  const navRef = useRef(null)
   const router = useRouter()
   const { language, setLanguage } = useLanguage()
 
@@ -63,6 +65,19 @@ export default function NavBar() {
     return () => listener.subscription.unsubscribe()
   }, [])
 
+  // Keep the sidebar's top offset in sync with the navbar's actual height
+  useEffect(() => {
+    if (!navRef.current) return
+    const el = navRef.current
+
+    const update = () => setNavHeight(el.offsetHeight)
+    update()
+
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/')
@@ -71,7 +86,10 @@ export default function NavBar() {
 
   return (
     <>
-      <nav className="w-full bg-black border-b border-zinc-800 px-6 py-3 flex items-center justify-between">
+      <nav
+        ref={navRef}
+        className="relative z-50 w-full bg-black border-b border-zinc-800 px-6 py-3 flex items-center justify-between"
+      >
         <div className="flex items-center gap-3">
           <MenuButton onClick={() => setSidebarOpen(true)} />
           <Link href="/" className="flex items-center">
@@ -99,6 +117,11 @@ export default function NavBar() {
         user={user}
         checked={checked}
         onLogout={handleLogout}
+        topOffset={navHeight}
+        onFeedbackClick={() => {
+          // TODO: wire this to your existing feedback trigger
+          // (route push, or open your feedback modal's open-state)
+        }}
       />
     </>
   )

@@ -4,7 +4,15 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import { useLanguage } from '@/context/LanguageContext'
 
-export default function Sidebar({ isOpen, onClose, user, checked, onLogout }) {
+export default function Sidebar({
+  isOpen,
+  onClose,
+  user,
+  checked,
+  onLogout,
+  onFeedbackClick,
+  topOffset = 0,
+}) {
   const { t, language } = useLanguage()
   const isRtl = language === 'ar'
 
@@ -27,46 +35,58 @@ export default function Sidebar({ isOpen, onClose, user, checked, onLogout }) {
 
   const sideClass = isRtl ? 'right-0 border-l' : 'left-0 border-r'
   const hiddenTranslate = isRtl ? 'translate-x-full' : '-translate-x-full'
+  const displayName = user?.email ? user.email.split('@')[0] : null
 
   return (
     <>
-      {/* Backdrop - click to close */}
+      {/* Backdrop - click to close. Starts below the navbar. */}
       <div
         onClick={onClose}
-        className={`fixed inset-0 bg-black/50 z-40 transition-opacity ${
+        style={{ top: topOffset }}
+        className={`fixed inset-x-0 bottom-0 bg-black/50 z-40 transition-opacity ${
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         aria-hidden="true"
       />
 
-      {/* Panel */}
+      {/* Panel - starts below the navbar */}
       <aside
-        className={`fixed top-0 h-full w-64 bg-black border-zinc-800 z-50
+        style={{ top: topOffset, height: `calc(100% - ${topOffset}px)` }}
+        className={`fixed w-64 bg-black border-zinc-800 z-40
           flex flex-col justify-between px-4 py-6 text-sm
           transform transition-transform duration-300 ease-in-out
           ${sideClass}
           ${isOpen ? 'translate-x-0' : hiddenTranslate}`}
         aria-hidden={!isOpen}
       >
-        {/* Top links */}
         <div className="flex flex-col gap-4">
+          {/* Welcome greeting */}
+          {checked && displayName && (
+            <p className="text-blue-100 font-medium text-base border-b border-zinc-800 pb-4">
+              {t.nav.welcome(displayName)}
+            </p>
+          )}
+
+          {/* Top links - bigger, button-like */}
           <Link
             href="/learning"
             onClick={onClose}
-            className="text-blue-200 hover:text-sky-300 transition"
+            className="text-base font-medium text-blue-200 border border-zinc-700 rounded-lg px-4 py-3 text-center
+              hover:border-sky-400 hover:bg-zinc-900 hover:text-sky-300 transition"
           >
             {t.nav.learning}
           </Link>
           <Link
             href="/games"
             onClick={onClose}
-            className="text-blue-200 hover:text-sky-300 transition"
+            className="text-base font-medium text-blue-200 border border-zinc-700 rounded-lg px-4 py-3 text-center
+              hover:border-sky-400 hover:bg-zinc-900 hover:text-sky-300 transition"
           >
             {t.nav.games}
           </Link>
         </div>
 
-        {/* Bottom: about, username, logout (or login/signup) */}
+        {/* Bottom: about, feedback, username, logout (or login/signup) */}
         <div className="flex flex-col gap-4 border-t border-zinc-800 pt-4">
           <Link
             href="/about"
@@ -75,6 +95,16 @@ export default function Sidebar({ isOpen, onClose, user, checked, onLogout }) {
           >
             {t.nav.about}
           </Link>
+
+          <button
+            onClick={() => {
+              onFeedbackClick?.()
+              onClose()
+            }}
+            className="text-left text-blue-200 hover:text-sky-300 transition"
+          >
+            {t.game.feedbackPrompt}
+          </button>
 
           {!checked ? null : user ? (
             <>
