@@ -3,17 +3,11 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { useLanguage } from '@/context/LanguageContext'
+import { useFeedback } from '@/context/FeedbackContext'
 
-export default function Sidebar({
-  isOpen,
-  onClose,
-  user,
-  checked,
-  onLogout,
-  onFeedbackClick,
-  topOffset = 0,
-}) {
+export default function Sidebar({ isOpen, onClose, user, checked, onLogout, topOffset = 0 }) {
   const { t, language } = useLanguage()
+  const { openFeedback } = useFeedback()
   const isRtl = language === 'ar'
 
   // Auto-hide: close on Escape
@@ -36,6 +30,9 @@ export default function Sidebar({
   const sideClass = isRtl ? 'right-0 border-l' : 'left-0 border-r'
   const hiddenTranslate = isRtl ? 'translate-x-full' : '-translate-x-full'
   const displayName = user?.email ? user.email.split('@')[0] : null
+
+  const imageButtonClass =
+    'block rounded-xl overflow-hidden transform transition duration-200 hover:scale-105'
 
   return (
     <>
@@ -62,27 +59,20 @@ export default function Sidebar({
         <div className="flex flex-col gap-4">
           {/* Welcome greeting */}
           {checked && displayName && (
-            <p className="text-blue-100 font-medium text-base border-b border-zinc-800 pb-4">
+            <p className="text-white font-light text-2xl tracking-tight border-b border-zinc-800 pb-4">
               {t.nav.welcome(displayName)}
             </p>
           )}
 
-          {/* Top links - bigger, button-like */}
-          <Link
-            href="/learning"
-            onClick={onClose}
-            className="text-base font-medium text-blue-200 border border-zinc-700 rounded-lg px-4 py-3 text-center
-              hover:border-sky-400 hover:bg-zinc-900 hover:text-sky-300 transition"
-          >
-            {t.nav.learning}
+          {/* Image-based nav buttons */}
+          <Link href="/learning" onClick={onClose} className={imageButtonClass}>
+            <img src="/Learn.jpg" alt={t.nav.learning} className="w-full h-auto block" />
           </Link>
-          <Link
-            href="/games"
-            onClick={onClose}
-            className="text-base font-medium text-blue-200 border border-zinc-700 rounded-lg px-4 py-3 text-center
-              hover:border-sky-400 hover:bg-zinc-900 hover:text-sky-300 transition"
-          >
-            {t.nav.games}
+          <Link href="/games" onClick={onClose} className={imageButtonClass}>
+            <img src="/Entertain.jpg" alt={t.nav.games} className="w-full h-auto block" />
+          </Link>
+          <Link href="/socialise" onClick={onClose} className={imageButtonClass}>
+            <img src="/Socialise.jpg" alt="Socialise" className="w-full h-auto block" />
           </Link>
         </div>
 
@@ -98,7 +88,7 @@ export default function Sidebar({
 
           <button
             onClick={() => {
-              onFeedbackClick?.()
+              openFeedback()
               onClose()
             }}
             className="text-left text-blue-200 hover:text-sky-300 transition"

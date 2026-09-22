@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useLanguage } from '@/context/LanguageContext'
+import { useFeedback } from '@/context/FeedbackContext'
 
 const FEEDBACK_LIMIT = 100
 
 export default function FeedbackWidget() {
   const { t } = useLanguage()
-  const [open, setOpen] = useState(false)
+  const { isOpen, closeFeedback } = useFeedback()
   const [game, setGame] = useState('general')
   const [text, setText] = useState('')
   const [sent, setSent] = useState(false)
@@ -20,15 +21,6 @@ export default function FeedbackWidget() {
     { id: 'german', label: t.learningHub.german },
     { id: 'trivia', label: t.learningHub.trivia },
   ]
-
-  // Opened externally — the sidebar's "Feedback" item dispatches this event
-  useEffect(() => {
-    function handleOpen() {
-      setOpen(true)
-    }
-    window.addEventListener('open-feedback-widget', handleOpen)
-    return () => window.removeEventListener('open-feedback-widget', handleOpen)
-  }, [])
 
   async function submitFeedback() {
     const trimmed = text.trim()
@@ -53,11 +45,11 @@ export default function FeedbackWidget() {
     setText('')
     setTimeout(() => {
       setSent(false)
-      setOpen(false)
+      closeFeedback()
     }, 1500)
   }
 
-  if (!open) return null
+  if (!isOpen) return null
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
@@ -69,7 +61,7 @@ export default function FeedbackWidget() {
             <div className="flex items-center justify-between">
               <p className="text-xs text-zinc-400">{t.game.feedbackPrompt}</p>
               <button
-                onClick={() => setOpen(false)}
+                onClick={closeFeedback}
                 className="text-zinc-500 hover:text-zinc-300 text-xs"
               >
                 ✕

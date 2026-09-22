@@ -118,10 +118,6 @@ export default function NavBar() {
         checked={checked}
         onLogout={handleLogout}
         topOffset={navHeight}
-        onFeedbackClick={() => {
-          // TODO: wire this to your existing feedback trigger
-          // (route push, or open your feedback modal's open-state)
-        }}
       />
     </>
   )

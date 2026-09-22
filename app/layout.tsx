@@ -4,6 +4,7 @@ import "./globals.css";
 import NavBar from "@/components/NavBar";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import { LanguageProvider } from "@/context/LanguageContext";
+import { FeedbackProvider } from "@/context/FeedbackContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,9 +29,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <LanguageProvider>
-          <NavBar />
-          {children}
-          <FeedbackWidget />
+          <FeedbackProvider>
+            <NavBar />
+            {children}
+            <FeedbackWidget />
+          </FeedbackProvider>
         </LanguageProvider>
       </body>
     </html>
