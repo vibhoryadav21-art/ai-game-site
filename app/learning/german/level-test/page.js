@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
+import { useLanguage } from '@/context/LanguageContext'
 import GermanLevelTest from '@/components/GermanLevelTest'
 
 export default function GermanLevelTestPage() {
+  const { t } = useLanguage()
   const [checked, setChecked] = useState(false)
   const [user, setUser] = useState(null)
   const [stats, setStats] = useState(null)
@@ -39,7 +41,7 @@ export default function GermanLevelTestPage() {
   if (!checked || loadingStats) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
-        <p className="text-zinc-400">Loading…</p>
+        <p className="text-zinc-400">{t.levelTestPage.loading}</p>
       </div>
     )
   }
@@ -47,12 +49,12 @@ export default function GermanLevelTestPage() {
   if (!user) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-zinc-300">Log in to take a level test.</p>
+        <p className="text-zinc-300">{t.levelTestPage.loginPrompt}</p>
         <Link
           href="/login?redirect=/learning/german/level-test"
           className="px-5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium transition"
         >
-          Log in
+          {t.nav.login}
         </Link>
       </div>
     )

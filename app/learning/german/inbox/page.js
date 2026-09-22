@@ -3,8 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
+import { useLanguage } from '@/context/LanguageContext'
 
 export default function GermanInboxPage() {
+  const { t } = useLanguage()
+  const ti = t.inbox
   const [checked, setChecked] = useState(false)
   const [user, setUser] = useState(null)
   const [items, setItems] = useState([])
@@ -114,7 +117,7 @@ export default function GermanInboxPage() {
   if (!checked || loading) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
-        <p className="text-zinc-400">Loading…</p>
+        <p className="text-zinc-400">{ti.loading}</p>
       </div>
     )
   }
@@ -122,7 +125,7 @@ export default function GermanInboxPage() {
   if (!user) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
-        <p className="text-zinc-300">Log in to see questions sent to you.</p>
+        <p className="text-zinc-300">{ti.loginPrompt}</p>
       </div>
     )
   }
@@ -130,14 +133,14 @@ export default function GermanInboxPage() {
   return (
     <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-6 p-6">
       <div className="w-full max-w-lg flex items-center justify-between">
-        <h1 className="font-serif text-2xl text-sky-300">Sent to you</h1>
+        <h1 className="font-serif text-2xl text-sky-300">{ti.title}</h1>
         <Link href="/learning/german" className="text-xs text-zinc-400 hover:text-sky-300 transition">
-          Back to practice
+          {ti.backToPractice}
         </Link>
       </div>
 
       {items.length === 0 && (
-        <p className="text-zinc-500 text-sm">No one's sent you a question yet.</p>
+        <p className="text-zinc-500 text-sm">{ti.empty}</p>
       )}
 
       <div className="w-full max-w-lg flex flex-col gap-4">
@@ -155,7 +158,7 @@ export default function GermanInboxPage() {
           return (
             <div key={item.id} className="bg-zinc-900 border border-zinc-700 rounded-2xl p-5 flex flex-col gap-3">
               <p className="text-xs text-zinc-500">
-                From <span className="text-zinc-300">{item.senderName}</span> · {item.question?.level}
+                {ti.from(item.senderName)} · {item.question?.level}
               </p>
               <p className="text-zinc-100">{item.question?.question}</p>
 
@@ -174,7 +177,7 @@ export default function GermanInboxPage() {
               ) : (
                 <div className="flex flex-col gap-1 text-sm">
                   <p className={item.receiver_correct ? 'text-emerald-300' : 'text-rose-300'}>
-                    You: {item.receiver_answer.toUpperCase()} {item.receiver_correct ? '✓' : '✗'}
+                    {ti.you}: {item.receiver_answer.toUpperCase()} {item.receiver_correct ? '✓' : '✗'}
                   </p>
                   <p className={item.sender_correct ? 'text-emerald-300' : 'text-rose-300'}>
                     {item.senderName}: {item.sender_answer.toUpperCase()} {item.sender_correct ? '✓' : '✗'}
