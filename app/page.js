@@ -4,7 +4,7 @@ export default function HomePage() {
       <img
         src="/logo-auszeit-with-tagline.png"
         alt="auszeit. — Learning. Entertainment. Socialise."
-        className="w-full max-w-xl h-auto"
+        className="w-full max-w-xl h-auto -translate-y-22"
       />
     </div>
   )

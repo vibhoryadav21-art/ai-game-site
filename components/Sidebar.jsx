@@ -9,11 +9,11 @@ import { useFeedback } from '@/context/FeedbackContext'
 // nothing else in this file needs to change.
 const LEARNING_APPS = [
   { href: '/learning/german', img: '/Deutsch.png', alt: 'Deutsch' },
-  { href: '/learning/trivia', img: '/Trivia.png', alt: 'Trivia' },
 ]
 
 const GAME_APPS = [
   { href: '/game', img: '/Higher-Lower.jpg', alt: 'Higher or Lower' },
+  { href: '/learning/trivia', img: '/Trivia.png', alt: 'Trivia' },
 ]
 
 export default function Sidebar({ isOpen, onClose, user, checked, onLogout, topOffset = 0 }) {
