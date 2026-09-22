@@ -5,17 +5,17 @@ import { useLanguage } from "@/context/LanguageContext";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"]; // content difficulty tags, unrelated to badges now
 const BADGES = [
-  { min: 0, name: "Beginner" },
-  { min: 30, name: "Challenger" },
-  { min: 60, name: "Advanced" },
-  { min: 90, name: "Pro" },
-  { min: 120, name: "QuizMaster" },
+  { min: 0, name: "Beginner", icon: "/badges/beginner.png" },
+  { min: 10, name: "Challenger", icon: "/badges/challenger.png" },
+  { min: 20, name: "Advanced", icon: "/badges/advanced.png" },
+  { min: 30, name: "Pro", icon: "/badges/pro.png" },
+  { min: 50, name: "QuizMaster", icon: "/badges/quizmaster.png" },
 ];
 
 function getBadge(score) {
-  let badge = BADGES[0].name;
+  let badge = BADGES[0];
   for (const tier of BADGES) {
-    if (score >= tier.min) badge = tier.name;
+    if (score >= tier.min) badge = tier;
   }
   return badge;
 }
@@ -42,6 +42,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   // switches into manual review mode, which doesn't affect leveling.
   const [practiceLevel, setPracticeLevel] = useState("all");
   const [practiceTopic, setPracticeTopic] = useState("all");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [topics, setTopics] = useState([]);
 
   const fetchQuestion = useCallback(async (level, topic, avoidId) => {
@@ -348,27 +349,65 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   ];
 
   return (
-    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
-      <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-zinc-400">
-        <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200">
-          {getBadge(stats.score || 0)} · {stats.score || 0} {t.practice.pointsSuffix}
+    <div className="relative flex-1 bg-black text-zinc-100 flex flex-col items-center gap-4 px-6 pt-24 pb-6">
+      <div className="absolute top-4 left-4 flex flex-col items-start gap-1.5">
+        <span className="flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs whitespace-nowrap">
+          <img src={getBadge(stats.score || 0).icon} alt="" className="w-6 h-6 object-contain" />
+          {getBadge(stats.score || 0).name} · {stats.score || 0} {t.practice.pointsSuffix}
         </span>
-        <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200">
-          CEFR: {stats.current_level}
+        <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs whitespace-nowrap">
+          {t.practice.cefrLabel(stats.current_level)}
         </span>
-        <span>{t.practice.overallCorrect(stats.total_correct, stats.total_answered)}</span>
-        <Link href="/learning/german/inbox" className="text-sky-300 hover:text-sky-200 transition">
-          {t.practice.inbox}
-        </Link>
-        <Link href="/learning/german/leaderboard" className="text-sky-300 hover:text-sky-200 transition">
-          {t.practice.leaderboard}
-        </Link>
-        <Link href="/learning/german/level-test" className="text-sky-300 hover:text-sky-200 transition">
-          Take a level test
-        </Link>
-        <Link href="/learning/german/writing" className="text-sky-300 hover:text-sky-200 transition">
-          Practice writing
-        </Link>
+      </div>
+
+      <div className="absolute top-4 right-4">
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-label={t.practice.menu}
+          className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="7.5" r="1.4" fill="currentColor" stroke="none" />
+            <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+            <circle cx="12" cy="16.5" r="1.4" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+            <div className="absolute right-0 mt-2 w-44 bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg z-20 flex flex-col overflow-hidden">
+              <Link
+                href="/learning/german/inbox"
+                onClick={() => setMenuOpen(false)}
+                className="px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-800 transition"
+              >
+                {t.practice.inbox}
+              </Link>
+              <Link
+                href="/learning/german/leaderboard"
+                onClick={() => setMenuOpen(false)}
+                className="px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-800 transition"
+              >
+                {t.practice.leaderboard}
+              </Link>
+              <Link
+                href="/learning/german/level-test"
+                onClick={() => setMenuOpen(false)}
+                className="px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-800 transition"
+              >
+                {t.practice.levelTest}
+              </Link>
+              <Link
+                href="/learning/german/writing"
+                onClick={() => setMenuOpen(false)}
+                className="px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-800 transition"
+              >
+                {t.practice.practiceWriting}
+              </Link>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
@@ -448,10 +487,18 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
       </div>
 
       {answered && (
-        <div className="flex flex-col items-center gap-3 w-full max-w-md">
-          <p className={selected === question.correct_option ? "text-emerald-300" : "text-rose-300"}>
-            {selected === question.correct_option ? t.practice.correctFeedback : t.practice.wrongFeedback}
-          </p>
+        <div className="w-full max-w-md flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className={selected === question.correct_option ? "text-emerald-300" : "text-rose-300"}>
+              {selected === question.correct_option ? t.practice.correctFeedback : t.practice.wrongFeedback}
+            </p>
+            <button
+              onClick={handleNext}
+              className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition shrink-0"
+            >
+              {t.practice.nextQuestion}
+            </button>
+          </div>
 
           {selected !== question.correct_option && (
             <div className="w-full flex flex-col gap-2">
@@ -530,13 +577,6 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
               )}
             </div>
           )}
-
-          <button
-            onClick={handleNext}
-            className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition"
-          >
-            {t.practice.nextQuestion}
-          </button>
         </div>
       )}
     </div>

@@ -6,10 +6,10 @@ import { useLanguage } from "@/context/LanguageContext";
 const LEVELS = ["Easy", "Medium", "Hard"]; // content difficulty tags, unrelated to badges now
 const BADGES = [
   { min: 0, name: "Beginner", icon: "/badges/beginner.png" },
-  { min: 30, name: "Challenger", icon: "/badges/challenger.png" },
-  { min: 60, name: "Advanced", icon: "/badges/advanced.png" },
-  { min: 90, name: "Pro", icon: "/badges/pro.png" },
-  { min: 120, name: "QuizMaster", icon: "/badges/quizmaster.png" },
+  { min: 10, name: "Challenger", icon: "/badges/challenger.png" },
+  { min: 20, name: "Advanced", icon: "/badges/advanced.png" },
+  { min: 30, name: "Pro", icon: "/badges/pro.png" },
+  { min: 50, name: "QuizMaster", icon: "/badges/quizmaster.png" },
 ];
 
 function getBadge(score) {
