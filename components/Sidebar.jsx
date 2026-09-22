@@ -9,6 +9,8 @@ import { useFeedback } from '@/context/FeedbackContext'
 // nothing else in this file needs to change.
 const LEARNING_APPS = [
   { href: '/learning/german', img: '/Deutsch.png', alt: 'Deutsch' },
+  { href: '/learning/hindi', img: '/Hindi.png', alt: 'Hindi' },
+  { href: '/learning/spanish', img: '/Spanish.png', alt: 'Spanish' },
 ]
 
 const GAME_APPS = [

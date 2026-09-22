@@ -21,6 +21,24 @@ export default function LearningHubPage() {
         </Link>
 
         <Link
+          href="/learning/hindi"
+          className="bg-blue-900/40 hover:bg-blue-900/60 border border-blue-700/40 rounded-2xl p-6 flex flex-col gap-2 transition"
+        >
+          <span className="text-3xl">🇮🇳</span>
+          <span className="font-medium text-blue-100">Hindi</span>
+          <span className="text-xs text-blue-300">Letters, greetings & phrases — A1</span>
+        </Link>
+
+        <Link
+          href="/learning/spanish"
+          className="bg-blue-900/40 hover:bg-blue-900/60 border border-blue-700/40 rounded-2xl p-6 flex flex-col gap-2 transition"
+        >
+          <span className="text-3xl">🇪🇸</span>
+          <span className="font-medium text-blue-100">Spanish</span>
+          <span className="text-xs text-blue-300">Greetings, numbers & phrases — A1</span>
+        </Link>
+
+        <Link
           href="/learning/trivia"
           className="bg-blue-900/40 hover:bg-blue-900/60 border border-blue-700/40 rounded-2xl p-6 flex flex-col gap-2 transition"
         >
@@ -28,11 +46,6 @@ export default function LearningHubPage() {
           <span className="font-medium text-blue-100">{t.learningHub.trivia}</span>
           <span className="text-xs text-blue-300">{t.learningHub.triviaDesc}</span>
         </Link>
-
-        <div className="bg-blue-900/10 border border-blue-700/20 rounded-2xl p-6 flex flex-col gap-2 opacity-50 cursor-not-allowed">
-          <span className="text-3xl">＋</span>
-          <span className="font-medium text-blue-100">{t.learningHub.comingSoon}</span>
-        </div>
       </div>
     </div>
   )

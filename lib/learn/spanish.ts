@@ -1,0 +1,67 @@
+import { LanguageCourse } from "./types";
+
+export const spanishCourse: LanguageCourse = {
+  slug: "spanish",
+  name: "Spanish",
+  flag: "🇪🇸",
+  categories: [
+    {
+      id: "greetings",
+      title: "Greetings",
+      items: [
+        { id: "g1", native: "Hola", roman: "Hola", english: "Hello" },
+        { id: "g2", native: "Gracias", roman: "Gracias", english: "Thank you" },
+        { id: "g3", native: "Por favor", roman: "Por favor", english: "Please" },
+        { id: "g4", native: "Lo siento", roman: "Lo siento", english: "Sorry" },
+        { id: "g5", native: "Sí", roman: "Sí", english: "Yes" },
+        { id: "g6", native: "No", roman: "No", english: "No" },
+        { id: "g7", native: "Adiós", roman: "Adiós", english: "Goodbye" },
+        { id: "g8", native: "Buenas noches", roman: "Buenas noches", english: "Good night" },
+      ],
+    },
+    {
+      id: "numbers",
+      title: "Numbers 1-10",
+      items: [
+        { id: "n1", native: "Uno", roman: "Uno", english: "One" },
+        { id: "n2", native: "Dos", roman: "Dos", english: "Two" },
+        { id: "n3", native: "Tres", roman: "Tres", english: "Three" },
+        { id: "n4", native: "Cuatro", roman: "Cuatro", english: "Four" },
+        { id: "n5", native: "Cinco", roman: "Cinco", english: "Five" },
+        { id: "n6", native: "Seis", roman: "Seis", english: "Six" },
+        { id: "n7", native: "Siete", roman: "Siete", english: "Seven" },
+        { id: "n8", native: "Ocho", roman: "Ocho", english: "Eight" },
+        { id: "n9", native: "Nueve", roman: "Nueve", english: "Nine" },
+        { id: "n10", native: "Diez", roman: "Diez", english: "Ten" },
+      ],
+    },
+    {
+      id: "phrases",
+      title: "Everyday Phrases",
+      items: [
+        { id: "p1", native: "¿Cómo estás?", roman: "¿Cómo estás?", english: "How are you?" },
+        { id: "p2", native: "Me llamo ...", roman: "Me llamo ...", english: "My name is ..." },
+        { id: "p3", native: "¿Cómo te llamas?", roman: "¿Cómo te llamas?", english: "What is your name?" },
+        { id: "p4", native: "No hablo español", roman: "No hablo español", english: "I don't speak Spanish" },
+        { id: "p5", native: "Habla más despacio, por favor", roman: "Habla más despacio, por favor", english: "Please speak slowly" },
+        { id: "p6", native: "¿Qué es esto?", roman: "¿Qué es esto?", english: "What is this?" },
+        { id: "p7", native: "¿Cuánto cuesta?", roman: "¿Cuánto cuesta?", english: "How much does it cost?" },
+        { id: "p8", native: "Agua", roman: "Agua", english: "Water" },
+        { id: "p9", native: "Comida", roman: "Comida", english: "Food" },
+        { id: "p10", native: "Ayuda", roman: "Ayuda", english: "Help" },
+      ],
+    },
+    {
+      id: "common-words",
+      title: "Common Words",
+      items: [
+        { id: "w1", native: "Casa", roman: "Casa", english: "House" },
+        { id: "w2", native: "Perro", roman: "Perro", english: "Dog" },
+        { id: "w3", native: "Gato", roman: "Gato", english: "Cat" },
+        { id: "w4", native: "Amigo", roman: "Amigo", english: "Friend" },
+        { id: "w5", native: "Familia", roman: "Familia", english: "Family" },
+        { id: "w6", native: "Tiempo", roman: "Tiempo", english: "Time / weather" },
+      ],
+    },
+  ],
+};
