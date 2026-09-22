@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 
 function shuffle(arr) {
@@ -61,22 +61,49 @@ function Flashcard({ items }) {
   )
 }
 
-function QuizMCQ({ items, onFinish }) {
-  const [questions] = useState(() =>
-    shuffle(items).map((item) => {
-      const distractors = shuffle(items.filter((i) => i.id !== item.id))
-        .slice(0, 3)
-        .map((i) => i.english)
-      return { item, options: shuffle([item.english, ...distractors]) }
-    })
-  )
+// Quiz now reads its questions from Supabase (table + category) instead of
+// generating them from the flashcard data. Each row already has its 4 fixed
+// options and correct answer baked in, same style as german_questions.
+function QuizMCQ({ table, category, onFinish }) {
+  const [questions, setQuestions] = useState(null) // null = still loading
   const [qIndex, setQIndex] = useState(0)
   const [score, setScore] = useState(0)
   const [selected, setSelected] = useState(null)
   const [done, setDone] = useState(false)
 
-  if (items.length < 4) {
-    return <p className="text-zinc-500">Need at least 4 items in this category for a quiz.</p>
+  useEffect(() => {
+    let active = true
+    setQuestions(null)
+    setQIndex(0)
+    setScore(0)
+    setSelected(null)
+    setDone(false)
+
+    supabase
+      .from(table)
+      .select('*')
+      .eq('category', category)
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) {
+          console.error(`Failed to load ${table}:`, error.message)
+          setQuestions([])
+          return
+        }
+        setQuestions(shuffle(data || []))
+      })
+
+    return () => {
+      active = false
+    }
+  }, [table, category])
+
+  if (questions === null) {
+    return <p className="text-zinc-500">Loading questions…</p>
+  }
+
+  if (questions.length === 0) {
+    return <p className="text-zinc-500">No quiz questions yet for this category.</p>
   }
 
   if (done) {
@@ -96,11 +123,13 @@ function QuizMCQ({ items, onFinish }) {
   }
 
   const q = questions[qIndex]
+  const options = [q.option_a, q.option_b, q.option_c, q.option_d]
+  const correctText = q['option_' + q.correct_option]
 
   function choose(option) {
     if (selected) return
     setSelected(option)
-    if (option === q.item.english) setScore((s) => s + 1)
+    if (option === correctText) setScore((s) => s + 1)
   }
 
   function next() {
@@ -114,14 +143,14 @@ function QuizMCQ({ items, onFinish }) {
       <p className="text-sm text-zinc-500">Question {qIndex + 1} / {questions.length}</p>
 
       <div className="text-center">
-        <p className="text-3xl font-bold text-sky-300">{q.item.native}</p>
-        <p className="text-lg text-zinc-400 italic">{q.item.roman}</p>
+        <p className="text-3xl font-bold text-sky-300">{q.native}</p>
+        <p className="text-lg text-zinc-400 italic">{q.roman}</p>
         <p className="text-sm text-zinc-600 mt-1">What does this mean?</p>
       </div>
 
       <div className="w-full flex flex-col gap-2">
-        {q.options.map((opt) => {
-          const isCorrect = opt === q.item.english
+        {options.map((opt) => {
+          const isCorrect = opt === correctText
           const revealed = selected !== null
           let style = 'border-zinc-700 hover:border-sky-400 bg-zinc-900'
           if (revealed && opt === selected && isCorrect) style = 'border-emerald-600 bg-emerald-900/40'
@@ -158,6 +187,7 @@ export default function LanguagePractice({ course, statsTable, user, stats, onSt
   const [quizKey, setQuizKey] = useState(0)
 
   const category = course.categories.find((c) => c.id === categoryId)
+  const questionsTable = statsTable.replace('_stats', '_questions')
 
   async function handleQuizFinish(score, total) {
     const updated = {
@@ -240,7 +270,7 @@ export default function LanguagePractice({ course, statsTable, user, stats, onSt
         {mode === 'flashcards' ? (
           <Flashcard items={category.items} />
         ) : (
-          <QuizMCQ items={category.items} onFinish={handleQuizFinish} />
+          <QuizMCQ table={questionsTable} category={categoryId} onFinish={handleQuizFinish} />
         )}
       </div>
     </div>
