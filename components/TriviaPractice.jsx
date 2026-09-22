@@ -5,17 +5,17 @@ import { useLanguage } from "@/context/LanguageContext";
 
 const LEVELS = ["Easy", "Medium", "Hard"]; // content difficulty tags, unrelated to badges now
 const BADGES = [
-  { min: 0, name: "Beginner" },
-  { min: 30, name: "Challenger" },
-  { min: 60, name: "Advanced" },
-  { min: 90, name: "Pro" },
-  { min: 120, name: "QuizMaster" },
+  { min: 0, name: "Beginner", icon: "/badges/beginner.png" },
+  { min: 30, name: "Challenger", icon: "/badges/challenger.png" },
+  { min: 60, name: "Advanced", icon: "/badges/advanced.png" },
+  { min: 90, name: "Pro", icon: "/badges/pro.png" },
+  { min: 120, name: "QuizMaster", icon: "/badges/quizmaster.png" },
 ];
 
 function getBadge(score) {
-  let badge = BADGES[0].name;
+  let badge = BADGES[0];
   for (const tier of BADGES) {
-    if (score >= tier.min) badge = tier.name;
+    if (score >= tier.min) badge = tier;
   }
   return badge;
 }
@@ -370,13 +370,26 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
   ];
 
   return (
-    <div className="relative flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
+    <div className="relative flex-1 bg-black text-zinc-100 flex flex-col items-center gap-4 px-6 pt-16 pb-6">
+      <div className="absolute top-4 left-4">
+        <span className="flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs whitespace-nowrap">
+          <img src={getBadge(stats.score || 0).icon} alt="" className="w-6 h-6 object-contain" />
+          {getBadge(stats.score || 0).name} · {stats.score || 0} {t.practice.pointsSuffix}
+        </span>
+      </div>
+
       <div className="absolute top-4 right-4">
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-zinc-200 hover:border-sky-400 transition"
+          aria-label={t.practice.menu}
+          className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
         >
-          {t.practice.menu} ▾
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="7.5" r="1.4" fill="currentColor" stroke="none" />
+            <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+            <circle cx="12" cy="16.5" r="1.4" fill="currentColor" stroke="none" />
+          </svg>
         </button>
         {menuOpen && (
           <>
@@ -406,12 +419,6 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
             </div>
           </>
         )}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-zinc-400">
-        <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200">
-          {getBadge(stats.score || 0)} · {stats.score || 0} {t.practice.pointsSuffix}
-        </span>
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
@@ -491,10 +498,18 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
       </div>
 
       {answered && (
-        <div className="flex flex-col items-center gap-3 w-full max-w-md">
-          <p className={selected === question.correct_option ? "text-emerald-300" : "text-rose-300"}>
-            {selected === question.correct_option ? t.practice.correctFeedback : t.practice.wrongFeedback}
-          </p>
+        <div className="w-full max-w-md flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className={selected === question.correct_option ? "text-emerald-300" : "text-rose-300"}>
+              {selected === question.correct_option ? t.practice.correctFeedback : t.practice.wrongFeedback}
+            </p>
+            <button
+              onClick={handleNext}
+              className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition shrink-0"
+            >
+              {t.practice.nextQuestion}
+            </button>
+          </div>
 
           {selected !== question.correct_option && (
             <div className="w-full flex flex-col gap-2">
@@ -573,13 +588,6 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
               )}
             </div>
           )}
-
-          <button
-            onClick={handleNext}
-            className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition"
-          >
-            {t.practice.nextQuestion}
-          </button>
         </div>
       )}
     </div>
