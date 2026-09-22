@@ -1,14 +1,26 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useLanguage } from '@/context/LanguageContext'
 import { useFeedback } from '@/context/FeedbackContext'
+
+// Add more entries here as new learning/games apps ship —
+// nothing else in this file needs to change.
+const LEARNING_APPS = [
+  { href: '/learning/german', img: '/Deutsch.png', alt: 'Deutsch' },
+  { href: '/learning/trivia', img: '/Trivia.png', alt: 'Trivia' },
+]
+
+const GAME_APPS = [
+  { href: '/game', img: '/Higher-Lower.jpg', alt: 'Higher or Lower' },
+]
 
 export default function Sidebar({ isOpen, onClose, user, checked, onLogout, topOffset = 0 }) {
   const { t, language } = useLanguage()
   const { openFeedback } = useFeedback()
   const isRtl = language === 'ar'
+  const [expanded, setExpanded] = useState(null) // 'learn' | 'games' | null
 
   // Auto-hide: close on Escape
   useEffect(() => {
@@ -27,12 +39,33 @@ export default function Sidebar({ isOpen, onClose, user, checked, onLogout, topO
     }
   }, [isOpen])
 
+  // Collapse any open accordion whenever the sidebar itself closes
+  useEffect(() => {
+    if (!isOpen) setExpanded(null)
+  }, [isOpen])
+
   const sideClass = isRtl ? 'right-0 border-l' : 'left-0 border-r'
   const hiddenTranslate = isRtl ? 'translate-x-full' : '-translate-x-full'
   const displayName = user?.email ? user.email.split('@')[0] : null
 
   const imageButtonClass =
-    'block rounded-xl overflow-hidden transform transition duration-200 hover:scale-105'
+    'block w-full rounded-xl overflow-hidden transform transition duration-200 hover:scale-105'
+
+  function toggleExpanded(key) {
+    setExpanded((prev) => (prev === key ? null : key))
+  }
+
+  function AppLink({ href, img, alt }) {
+    return (
+      <Link
+        href={href}
+        onClick={onClose}
+        className="block w-1/2 mx-auto rounded-lg overflow-hidden bg-black transform transition duration-200 hover:scale-105"
+      >
+        <img src={img} alt={alt} className="w-full h-12 object-contain" />
+      </Link>
+    )
+  }
 
   return (
     <>
@@ -50,7 +83,7 @@ export default function Sidebar({ isOpen, onClose, user, checked, onLogout, topO
       <aside
         style={{ top: topOffset, height: `calc(100% - ${topOffset}px)` }}
         className={`fixed w-64 bg-black border-zinc-800 z-40
-          flex flex-col justify-between px-4 py-6 text-sm
+          flex flex-col justify-between px-4 py-6 text-sm overflow-y-auto
           transform transition-transform duration-300 ease-in-out
           ${sideClass}
           ${isOpen ? 'translate-x-0' : hiddenTranslate}`}
@@ -64,13 +97,45 @@ export default function Sidebar({ isOpen, onClose, user, checked, onLogout, topO
             </p>
           )}
 
-          {/* Image-based nav buttons */}
-          <Link href="/learning" onClick={onClose} className={imageButtonClass}>
-            <img src="/Learn.jpg" alt={t.nav.learning} className="w-full h-auto block" />
-          </Link>
-          <Link href="/games" onClick={onClose} className={imageButtonClass}>
-            <img src="/Entertain.jpg" alt={t.nav.games} className="w-full h-auto block" />
-          </Link>
+          {/* Learn - expands to show sub-apps */}
+          <div>
+            <button onClick={() => toggleExpanded('learn')} className={imageButtonClass}>
+              <img src="/Learn.jpg" alt={t.nav.learning} className="w-full h-auto block" />
+            </button>
+            <div
+              className="grid transition-all duration-300 ease-in-out"
+              style={{ gridTemplateRows: expanded === 'learn' ? '1fr' : '0fr' }}
+            >
+              <div className="overflow-hidden">
+                <div className="flex flex-col gap-3 pt-3">
+                  {LEARNING_APPS.map((app) => (
+                    <AppLink key={app.href} {...app} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Entertain - expands to show sub-apps */}
+          <div>
+            <button onClick={() => toggleExpanded('games')} className={imageButtonClass}>
+              <img src="/Entertain.jpg" alt={t.nav.games} className="w-full h-auto block" />
+            </button>
+            <div
+              className="grid transition-all duration-300 ease-in-out"
+              style={{ gridTemplateRows: expanded === 'games' ? '1fr' : '0fr' }}
+            >
+              <div className="overflow-hidden">
+                <div className="flex flex-col gap-3 pt-3">
+                  {GAME_APPS.map((app) => (
+                    <AppLink key={app.href} {...app} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Socialise - plain link, no sub-apps yet */}
           <Link href="/socialise" onClick={onClose} className={imageButtonClass}>
             <img src="/Socialise.jpg" alt="Socialise" className="w-full h-auto block" />
           </Link>
