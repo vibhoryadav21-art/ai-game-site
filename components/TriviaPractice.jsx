@@ -43,6 +43,7 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
   // switches into manual review mode, which doesn't affect leveling.
   const [practiceLevel, setPracticeLevel] = useState("all");
   const [practiceTopic, setPracticeTopic] = useState("all");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [topics, setTopics] = useState([]);
 
   const fetchQuestion = useCallback(async (level, topic, avoidId) => {
@@ -369,21 +370,48 @@ export default function TriviaPractice({ user, stats, onStatsChange }) {
   ];
 
   return (
-    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
+    <div className="relative flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
+      <div className="absolute top-4 right-4">
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-zinc-200 hover:border-sky-400 transition"
+        >
+          {t.practice.menu} ▾
+        </button>
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+            <div className="absolute right-0 mt-2 w-40 bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg z-20 flex flex-col overflow-hidden">
+              <Link
+                href="/learning/trivia/inbox"
+                onClick={() => setMenuOpen(false)}
+                className="px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-800 transition"
+              >
+                {t.practice.inbox}
+              </Link>
+              <Link
+                href="/learning/trivia/leaderboard"
+                onClick={() => setMenuOpen(false)}
+                className="px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-800 transition"
+              >
+                {t.practice.leaderboard}
+              </Link>
+              <Link
+                href="/learning/trivia/challenges"
+                onClick={() => setMenuOpen(false)}
+                className="px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-800 transition"
+              >
+                {t.challenges.title}
+              </Link>
+            </div>
+          </>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-zinc-400">
         <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200">
           {getBadge(stats.score || 0)} · {stats.score || 0} {t.practice.pointsSuffix}
         </span>
-        <span>{t.practice.overallCorrect(stats.total_correct, stats.total_answered)}</span>
-        <Link href="/learning/trivia/inbox" className="text-sky-300 hover:text-sky-200 transition">
-          {t.practice.inbox}
-        </Link>
-        <Link href="/learning/trivia/leaderboard" className="text-sky-300 hover:text-sky-200 transition">
-          {t.practice.leaderboard}
-        </Link>
-        <Link href="/learning/trivia/challenges" className="text-sky-300 hover:text-sky-200 transition">
-          Challenges
-        </Link>
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
