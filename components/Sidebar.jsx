@@ -94,7 +94,10 @@ export default function Sidebar({ isOpen, onClose, user, checked, onLogout, topO
         <div className="flex flex-col gap-4">
           {/* Welcome greeting */}
           {checked && displayName && (
-            <p className="text-white font-light text-2xl tracking-tight border-b border-zinc-800 pb-4">
+            <p
+              style={{ fontFamily: "'Caveat', cursive" }}
+              className="text-gray-400 lowercase text-2xl tracking-tight border-b border-zinc-800 pb-4"
+            >
               {t.nav.welcome(displayName)}
             </p>
           )}
