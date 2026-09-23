@@ -36,6 +36,7 @@ function getBadge(score) {
 export default function GermanLeaderboardPage() {
   const { t } = useLanguage()
   const tc = t.crews
+  const tcc = t.crewChallenge
   const [checked, setChecked] = useState(false)
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -217,7 +218,7 @@ export default function GermanLeaderboardPage() {
       const { data: pool, error: poolError } = await poolQuery
       if (poolError) throw new Error(poolError.message)
       if (!pool || pool.length === 0) {
-        setChallengeError('No questions available for that level yet.')
+        setChallengeError(tcc.noQuestionsForLevel)
         return
       }
       const poolIds = pool.map((p) => p.id)
@@ -246,7 +247,7 @@ export default function GermanLeaderboardPage() {
       }
 
       if (selected.length === 0) {
-        setChallengeError('No questions available for that level yet.')
+        setChallengeError(tcc.noQuestionsForLevel)
         return
       }
       const orderedIds = shuffle(selected)
@@ -280,14 +281,12 @@ export default function GermanLeaderboardPage() {
       )
 
       if (orderedIds.length < challengeCount) {
-        setChallengeError(
-          `Only ${orderedIds.length} question${orderedIds.length === 1 ? '' : 's'} available for this level — created with that many instead.`
-        )
+        setChallengeError(tcc.createdWithFewer(orderedIds.length))
       }
       setChallenges((prev) => [challenge, ...prev])
     } catch (err) {
       console.error('Failed to create challenge:', err.message)
-      setChallengeError('Could not create the challenge — try again.')
+      setChallengeError(tcc.createError)
     } finally {
       setCreatingChallenge(false)
     }
@@ -475,7 +474,7 @@ export default function GermanLeaderboardPage() {
 
       {selectedCrewId && (
         <div className="w-full max-w-lg bg-zinc-900 border border-zinc-700 rounded-xl p-4 flex flex-col gap-3">
-          <p className="text-xs text-zinc-500 uppercase tracking-wide">Challenges</p>
+          <p className="text-xs text-zinc-500 uppercase tracking-wide">{tcc.sectionTitle}</p>
 
           <div className="flex flex-wrap items-center gap-2">
             <select
@@ -483,7 +482,7 @@ export default function GermanLeaderboardPage() {
               onChange={(e) => setChallengeLevel(e.target.value)}
               className="bg-zinc-800 border border-zinc-600 text-zinc-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-sky-400"
             >
-              <option value="all">All levels</option>
+              <option value="all">{tcc.levelAll}</option>
               {CHALLENGE_LEVELS.map((lvl) => (
                 <option key={lvl} value={lvl}>
                   {lvl}
@@ -497,7 +496,7 @@ export default function GermanLeaderboardPage() {
             >
               {CHALLENGE_COUNTS.map((n) => (
                 <option key={n} value={n}>
-                  {n} questions
+                  {tcc.questionsOption(n)}
                 </option>
               ))}
             </select>
@@ -506,33 +505,31 @@ export default function GermanLeaderboardPage() {
               disabled={creatingChallenge}
               className="text-sm bg-sky-500 hover:bg-sky-400 disabled:opacity-40 text-zinc-950 font-medium px-4 py-2 rounded-lg transition"
             >
-              {creatingChallenge ? 'Creating…' : 'Create challenge'}
+              {creatingChallenge ? tcc.creating : tcc.create}
             </button>
           </div>
 
           {challengeError && <p className="text-xs text-rose-300">{challengeError}</p>}
 
           {challenges.length === 0 ? (
-            <p className="text-sm text-zinc-500">No challenges yet — create one above.</p>
+            <p className="text-sm text-zinc-500">{tcc.noChallengesYet}</p>
           ) : (
             <div className="flex flex-col gap-2">
               {challenges.map((c) => {
                 const mine = challengeParticipation[c.id]
                 const statusLabel =
                   !mine || mine.status === 'not_started'
-                    ? 'Not started'
+                    ? tcc.statusNotStarted
                     : mine.status === 'in_progress'
-                    ? 'In progress'
-                    : `Completed · ${mine.score} pts`
+                    ? tcc.statusInProgress
+                    : tcc.statusCompleted(mine.score)
                 return (
                   <Link
                     key={c.id}
                     href={`/learning/german/challenge/${c.id}`}
                     className="flex items-center justify-between bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg px-3 py-2 transition text-sm"
                   >
-                    <span>
-                      {c.level === 'all' ? 'All levels' : c.level} · {c.question_count} questions
-                    </span>
+                    <span>{tcc.summary(c.level === 'all' ? tcc.levelAll : c.level, c.question_count)}</span>
                     <span className="text-xs text-zinc-400">{statusLabel}</span>
                   </Link>
                 )

@@ -49,7 +49,7 @@ export default function GermanInboxPage() {
     const merged = sent.map((s) => ({
       ...s,
       question: questionMap[s.question_id],
-      senderName: senderMap[s.sender_id] || 'Someone',
+      senderName: senderMap[s.sender_id] || ti.someone,
     }))
 
     setItems(merged)

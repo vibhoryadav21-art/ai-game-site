@@ -4,9 +4,12 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { useLanguage } from '@/context/LanguageContext'
 
 export default function ChallengePage() {
   const { id: challengeId } = useParams()
+  const { t } = useLanguage()
+  const tc = t.crewChallenge
 
   const [checked, setChecked] = useState(false)
   const [user, setUser] = useState(null)
@@ -224,7 +227,7 @@ export default function ChallengePage() {
     const waiting = []
     for (const uid of userIds) {
       const p = participantByUser[uid]
-      const name = nameMap[uid] || 'Someone'
+      const name = nameMap[uid] || tc.someone
       if (p && p.status === 'completed') {
         completed.push({
           user_id: uid,
@@ -239,7 +242,7 @@ export default function ChallengePage() {
         waiting.push({
           user_id: uid,
           name,
-          status: p?.status === 'in_progress' ? 'In progress' : 'Not started',
+          status: p?.status === 'in_progress' ? tc.statusInProgress : tc.statusNotStarted,
         })
       }
     }
@@ -249,7 +252,7 @@ export default function ChallengePage() {
 
     setResults({ completed, waiting })
     setLoadingResults(false)
-  }, [challenge, challengeId])
+  }, [challenge, challengeId, tc])
 
   useEffect(() => {
     if (view === 'results' || view === 'done') loadResults()
@@ -265,7 +268,7 @@ export default function ChallengePage() {
   if (!checked || loading) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
-        <p className="text-zinc-400">Loading…</p>
+        <p className="text-zinc-400">{tc.loading}</p>
       </div>
     )
   }
@@ -273,7 +276,7 @@ export default function ChallengePage() {
   if (!user) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
-        <p className="text-zinc-300">You need an account to take this challenge.</p>
+        <p className="text-zinc-300">{tc.needAccount}</p>
       </div>
     )
   }
@@ -281,12 +284,12 @@ export default function ChallengePage() {
   if (notAllowed || !challenge) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-zinc-300">This challenge isn&apos;t available to you.</p>
+        <p className="text-zinc-300">{tc.notAllowed}</p>
         <Link
           href="/learning/german/leaderboard"
           className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
         >
-          Back to crews
+          {tc.backToCrews}
         </Link>
       </div>
     )
@@ -295,38 +298,34 @@ export default function ChallengePage() {
   return (
     <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-6 p-6">
       <div className="w-full max-w-lg flex items-center justify-between">
-        <h1 className="font-serif text-2xl text-sky-300">Challenge</h1>
+        <h1 className="font-serif text-2xl text-sky-300">{tc.pageTitle}</h1>
         <Link href="/learning/german/leaderboard" className="text-xs text-zinc-400 hover:text-sky-300 transition">
-          Back to crews
+          {tc.backToCrews}
         </Link>
       </div>
 
       {view === 'start' && (
         <div className="w-full max-w-lg bg-zinc-900 border border-zinc-700 rounded-xl p-6 flex flex-col items-center gap-4 text-center">
           <p className="text-lg text-zinc-100">
-            {challenge.level === 'all' ? 'All levels' : challenge.level} · {challenge.question_count} questions
+            {tc.summary(challenge.level === 'all' ? tc.levelAll : challenge.level, challenge.question_count)}
           </p>
           <p className="text-sm text-zinc-400 max-w-sm">
-            Everyone in your crew answers the same {challenge.question_count} questions. You get{' '}
-            <span className="text-emerald-300">+2</span> for a correct answer,{' '}
-            <span className="text-rose-300">−1</span> for a wrong one, and{' '}
-            <span className="text-zinc-300">0</span> if you skip. Highest score wins — ties go to
-            whoever finishes faster.
+            {tc.introLine(challenge.question_count)} <span className="text-emerald-300">+2</span> {tc.correctLabel},{' '}
+            <span className="text-rose-300">−1</span> {tc.wrongLabel}, <span className="text-zinc-300">0</span>{' '}
+            {tc.skipLabel}. {tc.tieLine}
           </p>
           <button
             onClick={startChallenge}
             className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition"
           >
-            Start challenge
+            {tc.startButton}
           </button>
         </div>
       )}
 
       {view === 'playing' && questions[currentIndex] && (
         <div className="w-full max-w-md flex flex-col items-center gap-4">
-          <p className="text-xs text-zinc-500">
-            Question {currentIndex + 1} of {questions.length}
-          </p>
+          <p className="text-xs text-zinc-500">{tc.questionProgress(currentIndex + 1, questions.length)}</p>
           <p className="text-xl text-center">{questions[currentIndex].question}</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
@@ -363,7 +362,7 @@ export default function ChallengePage() {
                 onClick={() => recordAnswer(null)}
                 className="text-xs text-zinc-400 hover:text-zinc-200 underline underline-offset-2 transition"
               >
-                Skip (0 points)
+                {tc.skip}
               </button>
             )}
             {answered && (
@@ -371,7 +370,7 @@ export default function ChallengePage() {
                 onClick={goToNext}
                 className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition"
               >
-                {currentIndex + 1 >= questions.length ? 'Finish' : 'Next'}
+                {currentIndex + 1 >= questions.length ? tc.finish : tc.next}
               </button>
             )}
           </div>
@@ -381,15 +380,13 @@ export default function ChallengePage() {
       {view === 'done' && (
         <div className="w-full max-w-lg bg-zinc-900 border border-zinc-700 rounded-xl p-6 flex flex-col items-center gap-3 text-center">
           <p className="text-2xl">🏁</p>
-          <p className="text-xl text-zinc-100">You finished with {tally.score} points</p>
-          <p className="text-sm text-zinc-400">
-            {tally.correct} correct · {tally.wrong} wrong · {tally.skipped} skipped
-          </p>
+          <p className="text-xl text-zinc-100">{tc.doneTitle(tally.score)}</p>
+          <p className="text-sm text-zinc-400">{tc.doneBreakdown(tally.correct, tally.wrong, tally.skipped)}</p>
           <button
             onClick={() => setView('results')}
             className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition"
           >
-            View results
+            {tc.viewResults}
           </button>
         </div>
       )}
@@ -397,18 +394,16 @@ export default function ChallengePage() {
       {view === 'results' && (
         <div className="w-full max-w-lg flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-zinc-500 uppercase tracking-wide">
-              Results — you don&apos;t need to wait for everyone
-            </p>
+            <p className="text-xs text-zinc-500 uppercase tracking-wide">{tc.resultsTitle}</p>
             <button
               onClick={loadResults}
               className="text-xs text-sky-300 hover:text-sky-200 underline underline-offset-2 transition"
             >
-              Refresh
+              {tc.refresh}
             </button>
           </div>
 
-          {loadingResults && <p className="text-sm text-zinc-500">Loading…</p>}
+          {loadingResults && <p className="text-sm text-zinc-500">{tc.loading}</p>}
 
           <div className="flex flex-col gap-2">
             {results.completed.map((r, i) => {
@@ -423,24 +418,23 @@ export default function ChallengePage() {
                   <div className="flex items-center gap-3">
                     <span className="text-zinc-500 text-sm w-6">#{i + 1}</span>
                     <span className={isYou ? 'text-sky-300 font-medium' : 'text-zinc-100'}>
-                      {r.name} {isYou && '(you)'}
+                      {r.name} {isYou && tc.you}
                     </span>
                   </div>
                   <span className="text-sm text-zinc-300">
-                    {r.score} pts{' '}
-                    <span className="text-zinc-500">· {formatTime(r.time_taken_ms)}</span>
+                    {r.score} {tc.pts} <span className="text-zinc-500">· {formatTime(r.time_taken_ms)}</span>
                   </span>
                 </div>
               )
             })}
             {results.completed.length === 0 && !loadingResults && (
-              <p className="text-sm text-zinc-500">No one has finished yet — check back soon.</p>
+              <p className="text-sm text-zinc-500">{tc.noOneFinished}</p>
             )}
           </div>
 
           {results.waiting.length > 0 && (
             <div className="flex flex-col gap-1 pt-2 border-t border-zinc-800">
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Still to go</p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wide">{tc.stillToGo}</p>
               {results.waiting.map((r) => (
                 <p key={r.user_id} className="text-xs text-zinc-500">
                   {r.name} — {r.status}

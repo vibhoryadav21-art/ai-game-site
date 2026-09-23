@@ -4,9 +4,12 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import { useLanguage } from '@/context/LanguageContext'
 
 export default function ChallengePlayPage() {
   const { id } = useParams()
+  const { t } = useLanguage()
+  const tc = t.challenges
 
   const [checked, setChecked] = useState(false)
   const [user, setUser] = useState(null)
@@ -121,7 +124,7 @@ export default function ChallengePlayPage() {
     })
     if (rpcError) {
       console.error('Failed to respond:', rpcError.message)
-      setError("Couldn't update the challenge. It may have expired.")
+      setError(tc.respondError)
       return
     }
     setChallenge((c) => ({ ...c, status: accept ? 'accepted' : 'declined' }))
@@ -142,7 +145,7 @@ export default function ChallengePlayPage() {
 
     if (rpcError) {
       console.error('Failed to save answer:', rpcError.message)
-      setError("Couldn't save your answer. Try again.")
+      setError(tc.saveError)
       setSelected(null)
       return
     }
@@ -158,14 +161,14 @@ export default function ChallengePlayPage() {
   const shell = 'flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center'
   const backLink = (
     <Link href="/learning/trivia/challenges" className="text-xs text-sky-300 hover:text-sky-200 transition">
-      Back to challenges
+      {tc.backToChallenges}
     </Link>
   )
 
   if (!checked || loading) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
-        <p className="text-zinc-400">Loading…</p>
+        <p className="text-zinc-400">{t.practice.loading}</p>
       </div>
     )
   }
@@ -173,12 +176,12 @@ export default function ChallengePlayPage() {
   if (!user) {
     return (
       <div className={shell}>
-        <p className="text-zinc-300">Log in to play this challenge.</p>
+        <p className="text-zinc-300">{tc.loginToPlay}</p>
         <Link
           href={`/login?redirect=/learning/trivia/challenges/${id}`}
           className="px-5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium transition"
         >
-          Log in
+          {t.nav.login}
         </Link>
       </div>
     )
@@ -187,7 +190,7 @@ export default function ChallengePlayPage() {
   if (notFound || !challenge) {
     return (
       <div className={shell}>
-        <p className="text-zinc-300">We couldn't find this challenge. It may not be yours.</p>
+        <p className="text-zinc-300">{tc.notFound}</p>
         {backLink}
       </div>
     )
@@ -195,7 +198,7 @@ export default function ChallengePlayPage() {
 
   const iAmOpponent = challenge.opponent_id === user.id
   const otherId = iAmOpponent ? challenge.challenger_id : challenge.opponent_id
-  const otherName = names[otherId] || 'Your opponent'
+  const otherName = names[otherId] || tc.yourOpponent
   const expired = new Date(challenge.expires_at) < new Date()
 
   // ---- Results (both players finished) ----
@@ -207,18 +210,18 @@ export default function ChallengePlayPage() {
     const myTime = mine ? Number(mine.total_time_ms) : 0
     const theirTime = theirs ? Number(theirs.total_time_ms) : 0
 
-    let headline = "It's a draw!"
+    let headline = tc.draw
     let headlineStyle = 'text-zinc-200'
     let note = ''
     if (myScore !== theirScore) {
       const won = myScore > theirScore
-      headline = won ? 'You won!' : `${otherName} won`
+      headline = won ? tc.youWon : tc.theyWon(otherName)
       headlineStyle = won ? 'text-emerald-300' : 'text-rose-300'
     } else if (myTime !== theirTime) {
       const won = myTime < theirTime
-      headline = won ? 'You won!' : `${otherName} won`
+      headline = won ? tc.youWon : tc.theyWon(otherName)
       headlineStyle = won ? 'text-emerald-300' : 'text-rose-300'
-      note = 'Same score, so the faster player wins.'
+      note = tc.tieNote
     }
 
     return (
@@ -228,18 +231,18 @@ export default function ChallengePlayPage() {
 
         <div className="grid grid-cols-2 gap-3 w-full max-w-md">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <p className="text-xs text-zinc-400">You</p>
+            <p className="text-xs text-zinc-400">{t.practice.you}</p>
             <p className="text-2xl text-zinc-100">
               {myScore}/{questions.length}
             </p>
-            <p className="text-[11px] text-zinc-500">{(myTime / 1000).toFixed(1)}s total</p>
+            <p className="text-[11px] text-zinc-500">{tc.totalTime((myTime / 1000).toFixed(1))}</p>
           </div>
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
             <p className="text-xs text-zinc-400">{otherName}</p>
             <p className="text-2xl text-zinc-100">
               {theirScore}/{questions.length}
             </p>
-            <p className="text-[11px] text-zinc-500">{(theirTime / 1000).toFixed(1)}s total</p>
+            <p className="text-[11px] text-zinc-500">{tc.totalTime((theirTime / 1000).toFixed(1))}</p>
           </div>
         </div>
 
@@ -253,7 +256,7 @@ export default function ChallengePlayPage() {
     return (
       <div className={shell}>
         <p className="text-zinc-300">
-          {iAmOpponent ? 'You declined this challenge.' : `${otherName} declined this challenge.`}
+          {iAmOpponent ? tc.declinedByYou : tc.declinedByThem(otherName)}
         </p>
         {backLink}
       </div>
@@ -264,13 +267,13 @@ export default function ChallengePlayPage() {
   if (finished) {
     return (
       <div className={shell}>
-        <p className="text-zinc-200">You finished all {questions.length} questions.</p>
+        <p className="text-zinc-200">{tc.finishedAll(questions.length)}</p>
         <p className="text-sm text-zinc-400">
           {expired
-            ? `This challenge expired before ${otherName} finished.`
+            ? tc.expiredBeforeOpponent(otherName)
             : challenge.status === 'pending'
-              ? `Waiting for ${otherName} to accept and play. Results appear here when they're done.`
-              : `Waiting for ${otherName} to finish. Results appear here when they're done.`}
+              ? tc.waitingToAccept(otherName)
+              : tc.waitingToFinish(otherName)}
         </p>
         {backLink}
       </div>
@@ -281,7 +284,7 @@ export default function ChallengePlayPage() {
   if (expired) {
     return (
       <div className={shell}>
-        <p className="text-zinc-300">This challenge has expired.</p>
+        <p className="text-zinc-300">{tc.expired}</p>
         {backLink}
       </div>
     )
@@ -291,23 +294,20 @@ export default function ChallengePlayPage() {
   if (iAmOpponent && challenge.status === 'pending') {
     return (
       <div className={shell}>
-        <p className="text-xl text-zinc-100">{otherName} challenged you!</p>
-        <p className="text-sm text-zinc-400">
-          {questions.length} questions{challenge.topic ? ` about ${challenge.topic}` : ''}. You both
-          get the same questions. Highest score wins, and the faster player wins a tie.
-        </p>
+        <p className="text-xl text-zinc-100">{tc.challengedYou(otherName)}</p>
+        <p className="text-sm text-zinc-400">{tc.intro(questions.length, challenge.topic)}</p>
         <div className="flex gap-3">
           <button
             onClick={() => respond(true)}
             className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition"
           >
-            Accept
+            {tc.accept}
           </button>
           <button
             onClick={() => respond(false)}
             className="px-6 py-2 rounded-xl border border-zinc-700 text-zinc-200 hover:border-rose-400 transition"
           >
-            Decline
+            {tc.decline}
           </button>
         </div>
         {error && <p className="text-xs text-rose-300">{error}</p>}
@@ -320,7 +320,7 @@ export default function ChallengePlayPage() {
   if (!current) {
     return (
       <div className={shell}>
-        <p className="text-zinc-300">Some questions in this challenge are no longer available.</p>
+        <p className="text-zinc-300">{tc.questionsUnavailable}</p>
         {backLink}
       </div>
     )
@@ -338,7 +338,7 @@ export default function ChallengePlayPage() {
   return (
     <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
       <p className="text-xs text-zinc-400">
-        Challenge vs {otherName} · Question {answeredIds.length + 1} of {questions.length}
+        {tc.progress(otherName, answeredIds.length + 1, questions.length)}
       </p>
 
       <p className="text-xl text-center max-w-md">{current.question}</p>
@@ -368,13 +368,13 @@ export default function ChallengePlayPage() {
       {answered && (
         <div className="flex flex-col items-center gap-3">
           <p className={selected === correctOption ? 'text-emerald-300' : 'text-rose-300'}>
-            {selected === correctOption ? 'Correct!' : 'Not quite.'}
+            {selected === correctOption ? tc.correct : tc.notQuite}
           </p>
           <button
             onClick={handleNext}
             className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition"
           >
-            {isLast ? 'Finish' : 'Next question'}
+            {isLast ? tc.finish : t.practice.nextQuestion}
           </button>
         </div>
       )}

@@ -6,22 +6,23 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import { useLanguage } from '@/context/LanguageContext'
 
-function statusLabel(c, userId) {
+function statusLabel(c, userId, tc) {
   const iAmChallenger = c.challenger_id === userId
   const expired = new Date(c.expires_at) < new Date()
-  if (c.status === 'completed') return { text: 'Finished · see results', style: 'text-emerald-300' }
-  if (c.status === 'declined') return { text: 'Declined', style: 'text-zinc-500' }
-  if (expired) return { text: 'Expired', style: 'text-zinc-500' }
+  if (c.status === 'completed') return { text: tc.statusFinished, style: 'text-emerald-300' }
+  if (c.status === 'declined') return { text: tc.statusDeclined, style: 'text-zinc-500' }
+  if (expired) return { text: tc.statusExpired, style: 'text-zinc-500' }
   if (c.status === 'pending') {
     return iAmChallenger
-      ? { text: 'Waiting for them to accept', style: 'text-zinc-400' }
-      : { text: 'Wants to challenge you!', style: 'text-sky-300' }
+      ? { text: tc.statusWaitingAccept, style: 'text-zinc-400' }
+      : { text: tc.statusWantsToChallenge, style: 'text-sky-300' }
   }
-  return { text: 'In progress', style: 'text-amber-300' }
+  return { text: tc.statusInProgress, style: 'text-amber-300' }
 }
 
 export default function ChallengesPage() {
-  const { language } = useLanguage()
+  const { language, t } = useLanguage()
+  const tc = t.challenges
   const router = useRouter()
 
   const [checked, setChecked] = useState(false)
@@ -140,9 +141,9 @@ export default function ChallengesPage() {
     if (rpcError) {
       console.error('Failed to create challenge:', rpcError.message)
       if (rpcError.message.includes('Not enough questions')) {
-        setError('Not enough questions for that topic. Pick "All topics" or fewer questions.')
+        setError(tc.notEnoughQuestions)
       } else {
-        setError("Couldn't send the challenge. Try again.")
+        setError(tc.sendFailed)
       }
       return
     }
@@ -153,7 +154,7 @@ export default function ChallengesPage() {
   if (!checked || loading) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
-        <p className="text-zinc-400">Loading…</p>
+        <p className="text-zinc-400">{t.practice.loading}</p>
       </div>
     )
   }
@@ -161,19 +162,19 @@ export default function ChallengesPage() {
   if (!user) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-zinc-300">Log in to challenge your crew.</p>
+        <p className="text-zinc-300">{tc.loginToChallenge}</p>
         <div className="flex gap-3">
           <Link
             href="/login?redirect=/learning/trivia/challenges"
             className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
           >
-            Log in
+            {t.nav.login}
           </Link>
           <Link
             href="/signup?redirect=/learning/trivia/challenges"
             className="px-5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium transition"
           >
-            Sign up
+            {t.nav.signup}
           </Link>
         </div>
       </div>
@@ -183,32 +184,30 @@ export default function ChallengesPage() {
   return (
     <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-6 p-6">
       <div className="w-full max-w-md flex items-center justify-between">
-        <h1 className="text-xl">Challenges</h1>
+        <h1 className="text-xl">{tc.title}</h1>
         <Link
           href="/learning/trivia"
           className="text-xs text-sky-300 hover:text-sky-200 transition"
         >
-          Back to practice
+          {tc.backToPractice}
         </Link>
       </div>
 
       {/* Start a new challenge */}
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
-        <p className="text-sm text-zinc-300">Challenge a crew mate</p>
+        <p className="text-sm text-zinc-300">{tc.challengeCrewMate}</p>
 
         {!crewId && (
           <p className="text-xs text-zinc-500">
             <Link href="/learning/trivia/leaderboard" className="text-sky-300 hover:text-sky-200 transition">
-              Pick a crew
+              {tc.pickCrew}
             </Link>{' '}
-            first. You can challenge people in your crew.
+            {tc.pickCrewSuffix}
           </p>
         )}
 
         {crewId && mateIds.length === 0 && (
-          <p className="text-xs text-zinc-500">
-            No one else is in your crew yet. Invite a friend to join it.
-          </p>
+          <p className="text-xs text-zinc-500">{tc.noMates}</p>
         )}
 
         {crewId && mateIds.length > 0 && (
@@ -218,10 +217,10 @@ export default function ChallengesPage() {
               onChange={(e) => setOpponent(e.target.value)}
               className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm rounded-lg px-2 py-2 focus:outline-none focus:border-sky-400"
             >
-              <option value="">Choose a player</option>
+              <option value="">{tc.choosePlayer}</option>
               {mateIds.map((id) => (
                 <option key={id} value={id}>
-                  {names[id] || 'Someone'}
+                  {names[id] || tc.someone}
                 </option>
               ))}
             </select>
@@ -232,7 +231,7 @@ export default function ChallengesPage() {
                 onChange={(e) => setTopic(e.target.value)}
                 className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm rounded-lg px-2 py-2 focus:outline-none focus:border-sky-400"
               >
-                <option value="all">All topics</option>
+                <option value="all">{t.practice.allTopics}</option>
                 {topics.map((tp) => (
                   <option key={tp} value={tp}>
                     {tp}
@@ -245,12 +244,12 @@ export default function ChallengesPage() {
                 onChange={(e) => setCount(Number(e.target.value))}
                 className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm rounded-lg px-2 py-2 focus:outline-none focus:border-sky-400"
               >
-                <option value={5}>5 questions</option>
-                <option value={10}>10 questions</option>
-                <option value={15}>15 questions</option>
-                <option value={20}>20 questions</option>
-                <option value={25}>25 questions</option>
-                <option value={30}>30 questions</option>
+                <option value={5}>{tc.questionsOption(5)}</option>
+                <option value={10}>{tc.questionsOption(10)}</option>
+                <option value={15}>{tc.questionsOption(15)}</option>
+                <option value={20}>{tc.questionsOption(20)}</option>
+                <option value={25}>{tc.questionsOption(25)}</option>
+                <option value={30}>{tc.questionsOption(30)}</option>
               </select>
             </div>
 
@@ -259,7 +258,7 @@ export default function ChallengesPage() {
               disabled={!opponent || sending}
               className="bg-sky-500 hover:bg-sky-400 disabled:opacity-40 text-zinc-950 font-medium px-6 py-2 rounded-xl transition"
             >
-              {sending ? 'Sending…' : 'Send challenge'}
+              {sending ? t.practice.sending : tc.sendChallenge}
             </button>
             {error && <p className="text-xs text-rose-300">{error}</p>}
           </>
@@ -269,14 +268,12 @@ export default function ChallengesPage() {
       {/* Existing challenges */}
       <div className="w-full max-w-md flex flex-col gap-2">
         {challenges.length === 0 && (
-          <p className="text-xs text-zinc-500 text-center">
-            No challenges yet. Send one to a crew mate to get started.
-          </p>
+          <p className="text-xs text-zinc-500 text-center">{tc.noChallenges}</p>
         )}
 
         {challenges.map((c) => {
           const otherId = c.challenger_id === user.id ? c.opponent_id : c.challenger_id
-          const label = statusLabel(c, user.id)
+          const label = statusLabel(c, user.id, tc)
           return (
             <Link
               key={c.id}
@@ -284,9 +281,9 @@ export default function ChallengesPage() {
               className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 hover:border-sky-400 transition"
             >
               <div className="flex flex-col">
-                <span className="text-sm text-zinc-100">vs {names[otherId] || 'Someone'}</span>
+                <span className="text-sm text-zinc-100">{tc.vs(names[otherId] || tc.someone)}</span>
                 <span className="text-[11px] text-zinc-500">
-                  {c.question_ids.length} questions{c.topic ? ` · ${c.topic}` : ''}
+                  {tc.questionsSummary(c.question_ids.length, c.topic)}
                 </span>
               </div>
               <span className={`text-xs ${label.style}`}>{label.text}</span>
