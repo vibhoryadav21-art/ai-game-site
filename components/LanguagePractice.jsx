@@ -236,25 +236,20 @@ export default function LanguagePractice({ course, statsTable, user, stats, onSt
 
   return (
     <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-5 px-4 py-6">
-      {/* Level filter */}
-      <div className="flex justify-center gap-1.5">
-        {LEVELS.map((lvl) => (
-          <button
-            key={lvl}
-            onClick={() => setLevel(lvl)}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition ${
-              lvl === level
-                ? 'bg-sky-500 text-zinc-950 border-sky-500'
-                : 'border-zinc-700 text-zinc-400 active:border-sky-400'
-            }`}
-          >
-            {lvl}
-          </button>
-        ))}
-      </div>
+      {/* Level + topic dropdowns, side by side to save vertical space */}
+      <div className="w-full max-w-sm flex gap-2">
+        <select
+          value={level}
+          onChange={(e) => setLevel(e.target.value)}
+          className="w-24 shrink-0 bg-zinc-900 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-2 py-2.5 focus:outline-none focus:border-sky-400"
+        >
+          {LEVELS.map((lvl) => (
+            <option key={lvl} value={lvl}>
+              {lvl}
+            </option>
+          ))}
+        </select>
 
-      {/* Topic dropdown */}
-      <div className="w-full max-w-sm">
         {categoriesForLevel.length > 0 ? (
           <select
             value={categoryId}
@@ -262,7 +257,7 @@ export default function LanguagePractice({ course, statsTable, user, stats, onSt
               setCategoryId(e.target.value)
               setMode('flashcards')
             }}
-            className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-sky-400"
+            className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-sky-400"
           >
             {categoriesForLevel.map((c) => (
               <option key={c.id} value={c.id}>
@@ -271,7 +266,9 @@ export default function LanguagePractice({ course, statsTable, user, stats, onSt
             ))}
           </select>
         ) : (
-          <p className="text-center text-zinc-500 text-sm">No topics yet for {level}.</p>
+          <p className="flex-1 flex items-center justify-center text-center text-zinc-500 text-sm">
+            No topics yet for {level}.
+          </p>
         )}
       </div>
 
