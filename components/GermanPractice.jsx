@@ -20,7 +20,7 @@ function getBadge(score) {
   return badge;
 }
 
-export default function GermanPractice({ user, stats, onStatsChange }) {
+export default function GermanPractice({ user, stats, onStatsChange, lockFavoritesOnly = false }) {
   const { t, language } = useLanguage();
   const [question, setQuestion] = useState(null);
   const [loadingQuestion, setLoadingQuestion] = useState(true);
@@ -46,16 +46,37 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   const [topics, setTopics] = useState([]);
 
   // Repeat avoidance: which question ids this user has already seen, and
-  // when. seenIds lets us prefer never-before-seen questions; once a
-  // filtered pool is exhausted we fall back to the least-recently-seen
-  // ones instead of pure random, so repeats are spaced out rather than
-  // clustered.
+  // when. A question only counts as "seen" if it was answered after the
+  // most recent reset for its scope (level+topic+favorites combo) — this
+  // is entirely separate from crew challenges, which will track their own
+  // no-repeat history independently.
   const [seenIds, setSeenIds] = useState(() => new Set());
   const [lastSeenAt, setLastSeenAt] = useState({});
+  const [resetAtByScope, setResetAtByScope] = useState({});
 
   // Favorites: question ids the user has starred to revisit later.
   const [favoriteIds, setFavoriteIds] = useState(() => new Set());
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(lockFavoritesOnly);
+
+  // Why `question` is currently null, so the UI can show the right empty
+  // state: 'no-favorites' | 'no-match' | 'completed' | null.
+  const [completionReason, setCompletionReason] = useState(null);
+
+  function scopeKey(level, topic, favoritesOnly) {
+    return `${favoritesOnly ? "favorites" : "all"}|level=${level || "all"}|topic=${topic || "all"}`;
+  }
+
+  function currentCategoryLabel() {
+    if (showFavoritesOnly) {
+      if (practiceTopic !== "all") return `${practiceTopic} favorites`;
+      if (practiceLevel !== "all") return `${practiceLevel} favorites`;
+      return "your favorites";
+    }
+    if (practiceTopic !== "all" && practiceLevel !== "all") return `${practiceLevel} · ${practiceTopic}`;
+    if (practiceTopic !== "all") return practiceTopic;
+    if (practiceLevel !== "all") return practiceLevel;
+    return "all questions";
+  }
 
   // Load every question id this user has already answered, plus when, so
   // fetchQuestion can avoid repeats. Runs once — after that we keep the
@@ -83,6 +104,23 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     setLastSeenAt(lastSeen);
   }, []);
 
+  const loadResets = useCallback(async (userId) => {
+    const { data, error } = await supabase
+      .from("practice_resets")
+      .select("scope_key, reset_at")
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("Failed to load practice resets:", error.message);
+      return;
+    }
+    const map = {};
+    for (const row of data || []) {
+      map[row.scope_key] = row.reset_at;
+    }
+    setResetAtByScope(map);
+  }, []);
+
   const loadFavorites = useCallback(async (userId) => {
     const { data, error } = await supabase
       .from("favorite_questions")
@@ -101,6 +139,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
       const favoritesOnly = options.favoritesOnly ?? showFavoritesOnly;
 
       setLoadingQuestion(true);
+      setCompletionReason(null);
       let query = supabase.from("german_questions").select("*");
       if (level && level !== "all") query = query.eq("level", level);
       if (topic && topic !== "all") query = query.eq("topic", topic);
@@ -109,6 +148,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
         if (ids.length === 0) {
           setQuestion(null);
           setPoolSize(0);
+          setCompletionReason("no-favorites");
           setLoadingQuestion(false);
           return;
         }
@@ -120,42 +160,60 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
         console.error("Failed to load question:", error?.message);
         setQuestion(null);
         setPoolSize(0);
+        setCompletionReason("no-match");
         setLoadingQuestion(false);
         return;
       }
 
       setPoolSize(data.length);
 
-      // Prefer questions this user has never seen. Only fall back to
-      // repeats once every question in the current filter has been shown
-      // at least once, and even then favor whichever was seen longest ago.
-      const unseen = data.filter((q) => !seenIds.has(q.id));
-      let candidates = unseen.length > 0 ? unseen : data;
+      // A question counts as unseen if we've never logged an attempt for
+      // it, or if the last attempt was before this scope's reset time.
+      const resetAt = resetAtByScope[scopeKey(level, topic, favoritesOnly)];
+      const unseen = data.filter((q) => {
+        if (!seenIds.has(q.id)) return true;
+        if (resetAt && lastSeenAt[q.id] && new Date(lastSeenAt[q.id]) < new Date(resetAt)) return true;
+        return false;
+      });
 
+      if (unseen.length === 0) {
+        // Every question in this filter has already been answered — stop
+        // instead of looping back through them, and let the user decide
+        // whether to reset this category.
+        setQuestion(null);
+        setCompletionReason("completed");
+        setLoadingQuestion(false);
+        return;
+      }
+
+      let candidates = unseen;
       if (candidates.length > 1 && avoidId) {
         const withoutAvoid = candidates.filter((q) => q.id !== avoidId);
         if (withoutAvoid.length > 0) candidates = withoutAvoid;
       }
 
-      let pick;
-      if (unseen.length > 0) {
-        pick = candidates[Math.floor(Math.random() * candidates.length)];
-      } else {
-        // Every candidate has been seen before — sort by oldest last-seen
-        // time and pick randomly among the stalest handful so repeats
-        // don't always resurface in the same order.
-        const sorted = [...candidates].sort(
-          (a, b) => new Date(lastSeenAt[a.id] || 0) - new Date(lastSeenAt[b.id] || 0)
-        );
-        const stalestBucket = sorted.slice(0, Math.max(1, Math.min(5, sorted.length)));
-        pick = stalestBucket[Math.floor(Math.random() * stalestBucket.length)];
-      }
-
+      const pick = candidates[Math.floor(Math.random() * candidates.length)];
       setQuestion(pick);
       setLoadingQuestion(false);
     },
-    [seenIds, lastSeenAt, favoriteIds, showFavoritesOnly]
+    [seenIds, lastSeenAt, resetAtByScope, favoriteIds, showFavoritesOnly]
   );
+
+  async function resetCurrentCategory() {
+    const key = scopeKey(practiceLevel, practiceTopic, showFavoritesOnly);
+    const resetAt = new Date().toISOString();
+    const { error } = await supabase
+      .from("practice_resets")
+      .upsert({ user_id: user.id, scope_key: key, reset_at: resetAt }, { onConflict: "user_id,scope_key" });
+
+    if (error) {
+      console.error("Failed to reset progress:", error.message);
+      return;
+    }
+    setResetAtByScope((prev) => ({ ...prev, [key]: resetAt }));
+    resetQuestionUI();
+    fetchQuestion(practiceLevel, practiceTopic, null);
+  }
 
   async function toggleFavorite(questionId) {
     const isFavorited = favoriteIds.has(questionId);
@@ -194,6 +252,7 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   }
 
   function handleToggleFavoritesOnly() {
+    if (lockFavoritesOnly) return;
     const next = !showFavoritesOnly;
     setShowFavoritesOnly(next);
     resetQuestionUI();
@@ -222,12 +281,15 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     setGenerateError("");
   }
 
-  // Initial load, once. Wait for attempt history so the very first question
-  // picked already respects no-repeat, instead of only kicking in later.
+  // Initial load, once. Wait for attempt history + resets so the very
+  // first question picked already respects no-repeat, instead of only
+  // kicking in later.
   useEffect(() => {
     loadTopics("all");
     loadFavorites(user.id);
-    loadAttemptHistory(user.id).then(() => fetchQuestion("all", "all", null));
+    Promise.all([loadAttemptHistory(user.id), loadResets(user.id)]).then(() =>
+      fetchQuestion("all", "all", null)
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -479,14 +541,52 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   }
 
   if (!question) {
+    if (completionReason === "completed") {
+      return (
+        <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <p className="text-2xl">🎉</p>
+          <p className="text-xl text-zinc-100">
+            Hurray! You&apos;ve completed <span className="text-sky-300">{currentCategoryLabel()}</span>
+          </p>
+          <p className="text-sm text-zinc-400 max-w-sm">
+            You&apos;ve answered every question here. Reset to go through them again.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={resetCurrentCategory}
+              className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-5 py-2 rounded-xl transition"
+            >
+              Reset and practice again
+            </button>
+            {lockFavoritesOnly && (
+              <Link
+                href="/learning/german"
+                className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
+              >
+                All questions
+              </Link>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
         <p className="text-zinc-300">
-          {showFavoritesOnly
+          {completionReason === "no-favorites"
             ? "No favorites yet — tap the star on a question to save it here for later."
             : "No questions match this filter yet."}
         </p>
-        {showFavoritesOnly && (
+        {completionReason === "no-favorites" && lockFavoritesOnly && (
+          <Link
+            href="/learning/german"
+            className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
+          >
+            Go practice questions
+          </Link>
+        )}
+        {completionReason === "no-favorites" && !lockFavoritesOnly && (
           <button
             onClick={handleToggleFavoritesOnly}
             className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
@@ -560,6 +660,13 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
 
           <nav className="flex flex-col py-2">
             <Link
+              href="/learning/german/favorites"
+              onClick={() => setMenuOpen(false)}
+              className="px-4 py-4 text-base text-zinc-200 hover:bg-zinc-800 transition"
+            >
+              Favorites
+            </Link>
+            <Link
               href="/learning/german/inbox"
               onClick={() => setMenuOpen(false)}
               className="px-4 py-4 text-base text-zinc-200 hover:bg-zinc-800 transition"
@@ -618,27 +725,38 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
           ))}
         </select>
 
-        <button
-          onClick={handleToggleFavoritesOnly}
-          aria-pressed={showFavoritesOnly}
-          className={`flex items-center gap-1 text-xs rounded-lg px-2 py-1.5 border transition ${
-            showFavoritesOnly
-              ? "bg-amber-400/10 border-amber-400 text-amber-300"
-              : "bg-zinc-900 border-zinc-700 text-zinc-200 hover:border-amber-400"
-          }`}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="13"
-            height="13"
-            fill={showFavoritesOnly ? "currentColor" : "none"}
-            stroke="currentColor"
-            strokeWidth="1.8"
+        {!lockFavoritesOnly && (
+          <button
+            onClick={handleToggleFavoritesOnly}
+            aria-pressed={showFavoritesOnly}
+            className={`flex items-center gap-1 text-xs rounded-lg px-2 py-1.5 border transition ${
+              showFavoritesOnly
+                ? "bg-amber-400/10 border-amber-400 text-amber-300"
+                : "bg-zinc-900 border-zinc-700 text-zinc-200 hover:border-amber-400"
+            }`}
           >
-            <polygon points="12 2.5 15 9 22 10 16.8 14.7 18.2 21.5 12 18 5.8 21.5 7.2 14.7 2 10 9 9 12 2.5" />
-          </svg>
-          {favoriteIds.size > 0 ? `Favorites (${favoriteIds.size})` : "Favorites"}
-        </button>
+            <svg
+              viewBox="0 0 24 24"
+              width="13"
+              height="13"
+              fill={showFavoritesOnly ? "currentColor" : "none"}
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <polygon points="12 2.5 15 9 22 10 16.8 14.7 18.2 21.5 12 18 5.8 21.5 7.2 14.7 2 10 9 9 12 2.5" />
+            </svg>
+            {favoriteIds.size > 0 ? `Favorites (${favoriteIds.size})` : "Favorites"}
+          </button>
+        )}
+
+        {lockFavoritesOnly && (
+          <Link
+            href="/learning/german"
+            className="flex items-center gap-1 text-xs rounded-lg px-2 py-1.5 border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
+          >
+            All questions
+          </Link>
+        )}
       </div>
 
       {practiceLevel !== "all" && (
