@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { useLanguage } from "@/context/LanguageContext";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
 
 const BADGES = [
   { min: 0, name: "Beginner" },
-  { min: 30, name: "Challenger" },
-  { min: 60, name: "Advanced" },
-  { min: 90, name: "Pro" },
-  { min: 120, name: "QuizMaster" },
+  { min: 10, name: "Challenger" },
+  { min: 20, name: "Advanced" },
+  { min: 30, name: "Pro" },
+  { min: 50, name: "Master" },
 ];
 
 function getBadge(score) {
@@ -30,6 +31,8 @@ function shuffle(array) {
 }
 
 export default function GermanWriting({ user, stats, onStatsChange }) {
+  const { t } = useLanguage();
+  const tw = t.writingPage;
   const [practiceLevel, setPracticeLevel] = useState("all");
   const [question, setQuestion] = useState(null);
   const [loadingQuestion, setLoadingQuestion] = useState(true);
@@ -113,7 +116,7 @@ export default function GermanWriting({ user, stats, onStatsChange }) {
         })
         .eq("user_id", user.id);
     } catch (err) {
-      setError("Couldn't grade that — try again.");
+      setError(tw.gradeError);
     } finally {
       setGrading(false);
     }
@@ -127,7 +130,7 @@ export default function GermanWriting({ user, stats, onStatsChange }) {
   if (loadingQuestion || !question) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
-        <p className="text-zinc-400">Loading question…</p>
+        <p className="text-zinc-400">{t.practice.loadingQuestion}</p>
       </div>
     );
   }
@@ -136,10 +139,10 @@ export default function GermanWriting({ user, stats, onStatsChange }) {
     <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-6 p-6">
       <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-zinc-400">
         <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-200">
-          {getBadge(stats.score || 0)} · {stats.score || 0} pts
+          {getBadge(stats.score || 0)} · {stats.score || 0} {t.practice.pointsSuffix}
         </span>
         <Link href="/learning/german" className="text-sky-300 hover:text-sky-200 transition">
-          Back to MCQ practice
+          {tw.backToPractice}
         </Link>
       </div>
 
@@ -148,7 +151,7 @@ export default function GermanWriting({ user, stats, onStatsChange }) {
         onChange={(e) => handleLevelChange(e.target.value)}
         className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-sky-400"
       >
-        <option value="all">All levels</option>
+        <option value="all">{t.practice.allLevels}</option>
         {LEVELS.map((lvl) => (
           <option key={lvl} value={lvl}>
             {lvl}
@@ -164,7 +167,7 @@ export default function GermanWriting({ user, stats, onStatsChange }) {
           onChange={(e) => setAnswerText(e.target.value)}
           disabled={!!result}
           rows={3}
-          placeholder="Write your answer in German…"
+          placeholder={tw.answerPlaceholder}
           className="w-full resize-none rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-100 p-3 placeholder:text-zinc-500 focus:outline-none focus:border-sky-400 disabled:opacity-60"
         />
 
@@ -174,7 +177,7 @@ export default function GermanWriting({ user, stats, onStatsChange }) {
             disabled={!answerText.trim() || grading}
             className="bg-sky-500 hover:bg-sky-400 disabled:opacity-40 text-zinc-950 font-medium py-2 rounded-xl transition"
           >
-            {grading ? "Checking…" : "Submit"}
+            {grading ? tw.checking : tw.submit}
           </button>
         ) : (
           <div className="flex flex-col gap-3">
@@ -185,17 +188,17 @@ export default function GermanWriting({ user, stats, onStatsChange }) {
                   : "bg-rose-950 border-rose-700 text-rose-200"
               }`}
             >
-              <p className="font-medium mb-1">{result.correct ? "Correct! +1 point" : "Not quite. −1 point"}</p>
+              <p className="font-medium mb-1">{result.correct ? tw.correctPoint : tw.wrongPoint}</p>
               <p className="text-sm">{result.feedback}</p>
             </div>
             <p className="text-xs text-zinc-500">
-              One correct way to say it: <span className="text-zinc-300">{question.reference_answer}</span>
+              {tw.referenceAnswerLabel} <span className="text-zinc-300">{question.reference_answer}</span>
             </p>
             <button
               onClick={nextQuestion}
               className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium py-2 rounded-xl transition"
             >
-              Next question
+              {t.practice.nextQuestion}
             </button>
           </div>
         )}

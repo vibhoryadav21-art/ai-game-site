@@ -45,31 +45,160 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [topics, setTopics] = useState([]);
 
-  const fetchQuestion = useCallback(async (level, topic, avoidId) => {
-    setLoadingQuestion(true);
-    let query = supabase.from("german_questions").select("*");
-    if (level && level !== "all") query = query.eq("level", level);
-    if (topic && topic !== "all") query = query.eq("topic", topic);
-    const { data, error } = await query;
+  // Repeat avoidance: which question ids this user has already seen, and
+  // when. seenIds lets us prefer never-before-seen questions; once a
+  // filtered pool is exhausted we fall back to the least-recently-seen
+  // ones instead of pure random, so repeats are spaced out rather than
+  // clustered.
+  const [seenIds, setSeenIds] = useState(() => new Set());
+  const [lastSeenAt, setLastSeenAt] = useState({});
 
-    if (error || !data || data.length === 0) {
-      console.error("Failed to load question:", error?.message);
-      setQuestion(null);
-      setPoolSize(0);
-      setLoadingQuestion(false);
+  // Favorites: question ids the user has starred to revisit later.
+  const [favoriteIds, setFavoriteIds] = useState(() => new Set());
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+
+  // Load every question id this user has already answered, plus when, so
+  // fetchQuestion can avoid repeats. Runs once — after that we keep the
+  // sets updated locally as the user answers, so we don't need to refetch
+  // on every question.
+  const loadAttemptHistory = useCallback(async (userId) => {
+    const { data, error } = await supabase
+      .from("question_attempts")
+      .select("question_id, answered_at")
+      .eq("user_id", userId)
+      .order("answered_at", { ascending: true });
+
+    if (error) {
+      console.error("Failed to load attempt history:", error.message);
       return;
     }
 
-    setPoolSize(data.length);
-
-    let pool = data;
-    if (data.length > 1 && avoidId) {
-      pool = data.filter((q) => q.id !== avoidId);
+    const ids = new Set();
+    const lastSeen = {};
+    for (const row of data || []) {
+      ids.add(row.question_id);
+      lastSeen[row.question_id] = row.answered_at;
     }
-    const pick = pool[Math.floor(Math.random() * pool.length)];
-    setQuestion(pick);
-    setLoadingQuestion(false);
+    setSeenIds(ids);
+    setLastSeenAt(lastSeen);
   }, []);
+
+  const loadFavorites = useCallback(async (userId) => {
+    const { data, error } = await supabase
+      .from("favorite_questions")
+      .select("question_id")
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("Failed to load favorites:", error.message);
+      return;
+    }
+    setFavoriteIds(new Set((data || []).map((r) => r.question_id)));
+  }, []);
+
+  const fetchQuestion = useCallback(
+    async (level, topic, avoidId, options = {}) => {
+      const favoritesOnly = options.favoritesOnly ?? showFavoritesOnly;
+
+      setLoadingQuestion(true);
+      let query = supabase.from("german_questions").select("*");
+      if (level && level !== "all") query = query.eq("level", level);
+      if (topic && topic !== "all") query = query.eq("topic", topic);
+      if (favoritesOnly) {
+        const ids = Array.from(favoriteIds);
+        if (ids.length === 0) {
+          setQuestion(null);
+          setPoolSize(0);
+          setLoadingQuestion(false);
+          return;
+        }
+        query = query.in("id", ids);
+      }
+      const { data, error } = await query;
+
+      if (error || !data || data.length === 0) {
+        console.error("Failed to load question:", error?.message);
+        setQuestion(null);
+        setPoolSize(0);
+        setLoadingQuestion(false);
+        return;
+      }
+
+      setPoolSize(data.length);
+
+      // Prefer questions this user has never seen. Only fall back to
+      // repeats once every question in the current filter has been shown
+      // at least once, and even then favor whichever was seen longest ago.
+      const unseen = data.filter((q) => !seenIds.has(q.id));
+      let candidates = unseen.length > 0 ? unseen : data;
+
+      if (candidates.length > 1 && avoidId) {
+        const withoutAvoid = candidates.filter((q) => q.id !== avoidId);
+        if (withoutAvoid.length > 0) candidates = withoutAvoid;
+      }
+
+      let pick;
+      if (unseen.length > 0) {
+        pick = candidates[Math.floor(Math.random() * candidates.length)];
+      } else {
+        // Every candidate has been seen before — sort by oldest last-seen
+        // time and pick randomly among the stalest handful so repeats
+        // don't always resurface in the same order.
+        const sorted = [...candidates].sort(
+          (a, b) => new Date(lastSeenAt[a.id] || 0) - new Date(lastSeenAt[b.id] || 0)
+        );
+        const stalestBucket = sorted.slice(0, Math.max(1, Math.min(5, sorted.length)));
+        pick = stalestBucket[Math.floor(Math.random() * stalestBucket.length)];
+      }
+
+      setQuestion(pick);
+      setLoadingQuestion(false);
+    },
+    [seenIds, lastSeenAt, favoriteIds, showFavoritesOnly]
+  );
+
+  async function toggleFavorite(questionId) {
+    const isFavorited = favoriteIds.has(questionId);
+
+    // Optimistic update so the star responds immediately.
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (isFavorited) next.delete(questionId);
+      else next.add(questionId);
+      return next;
+    });
+
+    if (isFavorited) {
+      const { error } = await supabase
+        .from("favorite_questions")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("question_id", questionId);
+      if (error) {
+        console.error("Failed to remove favorite:", error.message);
+        setFavoriteIds((prev) => new Set(prev).add(questionId)); // revert
+      }
+    } else {
+      const { error } = await supabase
+        .from("favorite_questions")
+        .insert({ user_id: user.id, question_id: questionId });
+      if (error) {
+        console.error("Failed to add favorite:", error.message);
+        setFavoriteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(questionId); // revert
+          return next;
+        });
+      }
+    }
+  }
+
+  function handleToggleFavoritesOnly() {
+    const next = !showFavoritesOnly;
+    setShowFavoritesOnly(next);
+    resetQuestionUI();
+    fetchQuestion(practiceLevel, practiceTopic, question?.id, { favoritesOnly: next });
+  }
 
   const loadTopics = useCallback(async (level) => {
     let query = supabase.from("german_questions").select("topic");
@@ -93,10 +222,12 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     setGenerateError("");
   }
 
-  // Initial load, once.
+  // Initial load, once. Wait for attempt history so the very first question
+  // picked already respects no-repeat, instead of only kicking in later.
   useEffect(() => {
-    fetchQuestion("all", "all", null);
     loadTopics("all");
+    loadFavorites(user.id);
+    loadAttemptHistory(user.id).then(() => fetchQuestion("all", "all", null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -148,6 +279,12 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     setAnswered(true);
 
     const correct = optionKey === question.correct_option;
+
+    // Mark this question as seen right away so the next fetchQuestion call
+    // (triggered by "Next") won't need a round trip to know to skip it.
+    const seenAt = new Date().toISOString();
+    setSeenIds((prev) => new Set(prev).add(question.id));
+    setLastSeenAt((prev) => ({ ...prev, [question.id]: seenAt }));
 
     // Log this attempt, then pull everyone's latest attempt on this exact
     // question so the "how did others do" panel can show up immediately.
@@ -333,10 +470,30 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
     fetchQuestion(practiceLevel, practiceTopic, question.id);
   }
 
-  if (loadingQuestion || !question) {
+  if (loadingQuestion) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
         <p className="text-zinc-400">{t.practice.loadingQuestion}</p>
+      </div>
+    );
+  }
+
+  if (!question) {
+    return (
+      <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="text-zinc-300">
+          {showFavoritesOnly
+            ? "No favorites yet — tap the star on a question to save it here for later."
+            : "No questions match this filter yet."}
+        </p>
+        {showFavoritesOnly && (
+          <button
+            onClick={handleToggleFavoritesOnly}
+            className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
+          >
+            Back to all questions
+          </button>
+        )}
       </div>
     );
   }
@@ -460,6 +617,28 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
             </option>
           ))}
         </select>
+
+        <button
+          onClick={handleToggleFavoritesOnly}
+          aria-pressed={showFavoritesOnly}
+          className={`flex items-center gap-1 text-xs rounded-lg px-2 py-1.5 border transition ${
+            showFavoritesOnly
+              ? "bg-amber-400/10 border-amber-400 text-amber-300"
+              : "bg-zinc-900 border-zinc-700 text-zinc-200 hover:border-amber-400"
+          }`}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="13"
+            height="13"
+            fill={showFavoritesOnly ? "currentColor" : "none"}
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
+            <polygon points="12 2.5 15 9 22 10 16.8 14.7 18.2 21.5 12 18 5.8 21.5 7.2 14.7 2 10 9 9 12 2.5" />
+          </svg>
+          {favoriteIds.size > 0 ? `Favorites (${favoriteIds.size})` : "Favorites"}
+        </button>
       </div>
 
       {practiceLevel !== "all" && (
@@ -485,7 +664,30 @@ export default function GermanPractice({ user, stats, onStatsChange }) {
         </div>
       )}
 
-      <p className="text-xl text-center max-w-md">{question.question}</p>
+      <div className="flex items-start justify-center gap-2 max-w-md w-full">
+        <p className="text-xl text-center flex-1">{question.question}</p>
+        <button
+          onClick={() => toggleFavorite(question.id)}
+          aria-label={favoriteIds.has(question.id) ? "Remove from favorites" : "Add to favorites"}
+          aria-pressed={favoriteIds.has(question.id)}
+          className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-full border transition ${
+            favoriteIds.has(question.id)
+              ? "bg-amber-400/10 border-amber-400 text-amber-300"
+              : "bg-zinc-900 border-zinc-700 text-zinc-500 hover:border-amber-400 hover:text-amber-300"
+          }`}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill={favoriteIds.has(question.id) ? "currentColor" : "none"}
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
+            <polygon points="12 2.5 15 9 22 10 16.8 14.7 18.2 21.5 12 18 5.8 21.5 7.2 14.7 2 10 9 9 12 2.5" />
+          </svg>
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md">
         {options.map((opt) => {
