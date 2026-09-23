@@ -13,6 +13,17 @@ const BADGES = [
   { min: 50, name: 'Master' },
 ]
 const MAX_CREWS = 5
+const CHALLENGE_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1']
+const CHALLENGE_COUNTS = [5, 10, 15, 20, 25, 30]
+
+function shuffle(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
 
 function getBadge(score) {
   let badge = BADGES[0].name
@@ -38,6 +49,17 @@ export default function GermanLeaderboardPage() {
   const [rows, setRows] = useState([])
   const [newCrewName, setNewCrewName] = useState('')
   const [formError, setFormError] = useState('')
+
+  // Crew challenges: a fixed set of questions everyone in the crew answers,
+  // scored and compared. Kept entirely separate from personal practice
+  // tracking (no-repeat/reset/favorites) — challenges track their own
+  // crew-wide question-usage history instead.
+  const [challenges, setChallenges] = useState([])
+  const [challengeParticipation, setChallengeParticipation] = useState({})
+  const [challengeLevel, setChallengeLevel] = useState('all')
+  const [challengeCount, setChallengeCount] = useState(10)
+  const [creatingChallenge, setCreatingChallenge] = useState(false)
+  const [challengeError, setChallengeError] = useState('')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -144,9 +166,132 @@ export default function GermanLeaderboardPage() {
     setRows(ranked)
   }, [])
 
+  const loadChallenges = useCallback(
+    async (crewId) => {
+      if (!crewId) {
+        setChallenges([])
+        setChallengeParticipation({})
+        return
+      }
+      const { data: challengeRows, error } = await supabase
+        .from('crew_challenges')
+        .select('*')
+        .eq('crew_id', crewId)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Failed to load challenges:', error.message)
+        return
+      }
+      setChallenges(challengeRows || [])
+
+      if (challengeRows && challengeRows.length > 0 && user) {
+        const ids = challengeRows.map((c) => c.id)
+        const { data: myParticipation } = await supabase
+          .from('challenge_participants')
+          .select('challenge_id, status, score')
+          .eq('user_id', user.id)
+          .in('challenge_id', ids)
+        setChallengeParticipation(Object.fromEntries((myParticipation || []).map((p) => [p.challenge_id, p])))
+      } else {
+        setChallengeParticipation({})
+      }
+    },
+    [user]
+  )
+
   useEffect(() => {
     loadLeaderboardForCrew(selectedCrewId)
-  }, [selectedCrewId, loadLeaderboardForCrew])
+    loadChallenges(selectedCrewId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCrewId, loadLeaderboardForCrew, loadChallenges])
+
+  async function createChallenge() {
+    setChallengeError('')
+    if (!selectedCrewId) return
+    setCreatingChallenge(true)
+    try {
+      // 1. Pool of questions matching the chosen level.
+      let poolQuery = supabase.from('german_questions').select('id')
+      if (challengeLevel !== 'all') poolQuery = poolQuery.eq('level', challengeLevel)
+      const { data: pool, error: poolError } = await poolQuery
+      if (poolError) throw new Error(poolError.message)
+      if (!pool || pool.length === 0) {
+        setChallengeError('No questions available for that level yet.')
+        return
+      }
+      const poolIds = pool.map((p) => p.id)
+
+      // 2. This crew's usage history for this level, so challenges rotate
+      // through fresh questions instead of repeating until the whole pool
+      // has been used at least once.
+      const { data: history } = await supabase
+        .from('crew_challenge_question_history')
+        .select('question_id, last_used_at')
+        .eq('crew_id', selectedCrewId)
+        .eq('level', challengeLevel)
+
+      const usedMap = Object.fromEntries((history || []).map((h) => [h.question_id, h.last_used_at]))
+      const unused = poolIds.filter((id) => !(id in usedMap))
+      const used = poolIds
+        .filter((id) => id in usedMap)
+        .sort((a, b) => new Date(usedMap[a]) - new Date(usedMap[b]))
+
+      const count = Math.min(challengeCount, poolIds.length)
+      let selected
+      if (unused.length >= count) {
+        selected = shuffle(unused).slice(0, count)
+      } else {
+        selected = [...unused, ...used.slice(0, count - unused.length)]
+      }
+
+      if (selected.length === 0) {
+        setChallengeError('No questions available for that level yet.')
+        return
+      }
+      const orderedIds = shuffle(selected)
+
+      // 3. Create the challenge with this fixed set — everyone in the crew
+      // answers the exact same questions, in the same order.
+      const { data: challenge, error: createError } = await supabase
+        .from('crew_challenges')
+        .insert({
+          crew_id: selectedCrewId,
+          created_by: user.id,
+          level: challengeLevel,
+          question_count: orderedIds.length,
+          question_ids: orderedIds,
+        })
+        .select()
+        .single()
+      if (createError) throw new Error(createError.message)
+
+      // 4. Record usage so the next challenge for this crew+level knows
+      // which questions have already been used.
+      const nowIso = new Date().toISOString()
+      await supabase.from('crew_challenge_question_history').upsert(
+        orderedIds.map((qid) => ({
+          crew_id: selectedCrewId,
+          level: challengeLevel,
+          question_id: qid,
+          last_used_at: nowIso,
+        })),
+        { onConflict: 'crew_id,level,question_id' }
+      )
+
+      if (orderedIds.length < challengeCount) {
+        setChallengeError(
+          `Only ${orderedIds.length} question${orderedIds.length === 1 ? '' : 's'} available for this level — created with that many instead.`
+        )
+      }
+      setChallenges((prev) => [challenge, ...prev])
+    } catch (err) {
+      console.error('Failed to create challenge:', err.message)
+      setChallengeError('Could not create the challenge — try again.')
+    } finally {
+      setCreatingChallenge(false)
+    }
+  }
 
   async function selectCrew(crewId) {
     setSelectedCrewId(crewId)
@@ -327,6 +472,75 @@ export default function GermanLeaderboardPage() {
 
         {formError && <p className="text-xs text-rose-300">{formError}</p>}
       </div>
+
+      {selectedCrewId && (
+        <div className="w-full max-w-lg bg-zinc-900 border border-zinc-700 rounded-xl p-4 flex flex-col gap-3">
+          <p className="text-xs text-zinc-500 uppercase tracking-wide">Challenges</p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={challengeLevel}
+              onChange={(e) => setChallengeLevel(e.target.value)}
+              className="bg-zinc-800 border border-zinc-600 text-zinc-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-sky-400"
+            >
+              <option value="all">All levels</option>
+              {CHALLENGE_LEVELS.map((lvl) => (
+                <option key={lvl} value={lvl}>
+                  {lvl}
+                </option>
+              ))}
+            </select>
+            <select
+              value={challengeCount}
+              onChange={(e) => setChallengeCount(Number(e.target.value))}
+              className="bg-zinc-800 border border-zinc-600 text-zinc-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-sky-400"
+            >
+              {CHALLENGE_COUNTS.map((n) => (
+                <option key={n} value={n}>
+                  {n} questions
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={createChallenge}
+              disabled={creatingChallenge}
+              className="text-sm bg-sky-500 hover:bg-sky-400 disabled:opacity-40 text-zinc-950 font-medium px-4 py-2 rounded-lg transition"
+            >
+              {creatingChallenge ? 'Creating…' : 'Create challenge'}
+            </button>
+          </div>
+
+          {challengeError && <p className="text-xs text-rose-300">{challengeError}</p>}
+
+          {challenges.length === 0 ? (
+            <p className="text-sm text-zinc-500">No challenges yet — create one above.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {challenges.map((c) => {
+                const mine = challengeParticipation[c.id]
+                const statusLabel =
+                  !mine || mine.status === 'not_started'
+                    ? 'Not started'
+                    : mine.status === 'in_progress'
+                    ? 'In progress'
+                    : `Completed · ${mine.score} pts`
+                return (
+                  <Link
+                    key={c.id}
+                    href={`/learning/german/challenge/${c.id}`}
+                    className="flex items-center justify-between bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg px-3 py-2 transition text-sm"
+                  >
+                    <span>
+                      {c.level === 'all' ? 'All levels' : c.level} · {c.question_count} questions
+                    </span>
+                    <span className="text-xs text-zinc-400">{statusLabel}</span>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {selectedCrewId && (
         <div className="w-full max-w-lg flex flex-col gap-2">

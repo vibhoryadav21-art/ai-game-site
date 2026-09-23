@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 
+const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1']
+
 function shuffle(arr) {
   return [...arr].sort(() => Math.random() - 0.5)
 }
@@ -10,6 +12,13 @@ function shuffle(arr) {
 function Flashcard({ items }) {
   const [index, setIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
+
+  // Reset to the first card whenever the underlying item list changes
+  // (e.g. switching topic or level).
+  useEffect(() => {
+    setIndex(0)
+    setFlipped(false)
+  }, [items])
 
   if (items.length === 0) return null
   const item = items[index]
@@ -24,13 +33,13 @@ function Flashcard({ items }) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <p className="text-sm text-zinc-500">{index + 1} / {items.length}</p>
+    <div className="flex flex-col items-center gap-3 w-full">
+      <p className="text-xs text-zinc-500">{index + 1} / {items.length}</p>
 
       <div
         onClick={() => setFlipped((f) => !f)}
-        className="w-full max-w-sm h-56 rounded-2xl border border-zinc-800 bg-zinc-900 cursor-pointer
-                   flex flex-col items-center justify-center gap-2 p-6 text-center hover:border-sky-500/50 transition"
+        className="w-full max-w-sm h-52 rounded-2xl border border-zinc-800 bg-zinc-900 cursor-pointer
+                   flex flex-col items-center justify-center gap-2 p-6 text-center active:border-sky-500/50 transition"
       >
         {!flipped ? (
           <>
@@ -39,20 +48,20 @@ function Flashcard({ items }) {
             <span className="text-xs text-zinc-600 mt-2">(tap to reveal meaning)</span>
           </>
         ) : (
-          <span className="text-2xl font-semibold text-zinc-100">{item.english}</span>
+          <span className="text-xl font-semibold text-zinc-100">{item.english}</span>
         )}
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 w-full max-w-sm">
         <button
           onClick={prev}
-          className="px-4 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
+          className="flex-1 px-4 py-2.5 rounded-lg border border-zinc-700 text-zinc-200 active:border-sky-400 transition"
         >
           ← Prev
         </button>
         <button
           onClick={next}
-          className="px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium transition"
+          className="flex-1 px-4 py-2.5 rounded-lg bg-sky-500 active:bg-sky-400 text-zinc-950 font-medium transition"
         >
           Next →
         </button>
@@ -61,9 +70,8 @@ function Flashcard({ items }) {
   )
 }
 
-// Quiz now reads its questions from Supabase (table + category) instead of
-// generating them from the flashcard data. Each row already has its 4 fixed
-// options and correct answer baked in, same style as german_questions.
+// Quiz reads its questions from Supabase (table + category), each row
+// already carrying its 4 fixed options and correct answer.
 function QuizMCQ({ table, category, onFinish }) {
   const [questions, setQuestions] = useState(null) // null = still loading
   const [qIndex, setQIndex] = useState(0)
@@ -99,11 +107,11 @@ function QuizMCQ({ table, category, onFinish }) {
   }, [table, category])
 
   if (questions === null) {
-    return <p className="text-zinc-500">Loading questions…</p>
+    return <p className="text-zinc-500 text-sm">Loading questions…</p>
   }
 
   if (questions.length === 0) {
-    return <p className="text-zinc-500">No quiz questions yet for this category.</p>
+    return <p className="text-zinc-500 text-sm text-center">No quiz questions yet for this topic.</p>
   }
 
   if (done) {
@@ -114,7 +122,7 @@ function QuizMCQ({ table, category, onFinish }) {
         </p>
         <button
           onClick={() => onFinish(score, questions.length)}
-          className="px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium transition"
+          className="px-4 py-2.5 rounded-lg bg-sky-500 active:bg-sky-400 text-zinc-950 font-medium transition"
         >
           Continue
         </button>
@@ -139,8 +147,8 @@ function QuizMCQ({ table, category, onFinish }) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-5 max-w-sm mx-auto">
-      <p className="text-sm text-zinc-500">Question {qIndex + 1} / {questions.length}</p>
+    <div className="flex flex-col items-center gap-4 w-full max-w-sm">
+      <p className="text-xs text-zinc-500">Question {qIndex + 1} / {questions.length}</p>
 
       <div className="text-center">
         <p className="text-3xl font-bold text-sky-300">{q.native}</p>
@@ -148,11 +156,12 @@ function QuizMCQ({ table, category, onFinish }) {
         <p className="text-sm text-zinc-600 mt-1">What does this mean?</p>
       </div>
 
-      <div className="w-full flex flex-col gap-2">
+      {/* 2x2 grid, sized for thumbs */}
+      <div className="w-full grid grid-cols-2 gap-2">
         {options.map((opt) => {
           const isCorrect = opt === correctText
           const revealed = selected !== null
-          let style = 'border-zinc-700 hover:border-sky-400 bg-zinc-900'
+          let style = 'border-zinc-700 active:border-sky-400 bg-zinc-900'
           if (revealed && opt === selected && isCorrect) style = 'border-emerald-600 bg-emerald-900/40'
           if (revealed && opt === selected && !isCorrect) style = 'border-rose-700 bg-rose-900/40'
           if (revealed && opt !== selected && isCorrect) style = 'border-emerald-600/60 bg-emerald-900/20'
@@ -161,7 +170,8 @@ function QuizMCQ({ table, category, onFinish }) {
             <button
               key={opt}
               onClick={() => choose(opt)}
-              className={`px-4 py-2 rounded-lg text-left border text-zinc-100 ${style}`}
+              className={`min-h-[64px] px-2 py-2 rounded-lg border text-zinc-100 text-sm leading-snug
+                          flex items-center justify-center text-center ${style}`}
             >
               {opt}
             </button>
@@ -172,7 +182,7 @@ function QuizMCQ({ table, category, onFinish }) {
       {selected && (
         <button
           onClick={next}
-          className="px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium transition"
+          className="w-full px-4 py-2.5 rounded-lg bg-sky-500 active:bg-sky-400 text-zinc-950 font-medium transition"
         >
           {qIndex + 1 >= questions.length ? 'See Score' : 'Next Question →'}
         </button>
@@ -182,11 +192,21 @@ function QuizMCQ({ table, category, onFinish }) {
 }
 
 export default function LanguagePractice({ course, statsTable, user, stats, onStatsChange }) {
-  const [categoryId, setCategoryId] = useState(course.categories[0].id)
+  const [level, setLevel] = useState('A1')
+
+  const categoriesForLevel = course.categories.filter((c) => (c.level || 'A1') === level)
+  const [categoryId, setCategoryId] = useState(categoriesForLevel[0]?.id ?? '')
   const [mode, setMode] = useState('flashcards')
   const [quizKey, setQuizKey] = useState(0)
 
-  const category = course.categories.find((c) => c.id === categoryId)
+  // Whenever the level changes, jump to the first topic available at that level.
+  useEffect(() => {
+    const list = course.categories.filter((c) => (c.level || 'A1') === level)
+    setCategoryId(list[0]?.id ?? '')
+    setMode('flashcards')
+  }, [level, course])
+
+  const category = categoriesForLevel.find((c) => c.id === categoryId)
   const questionsTable = statsTable.replace('_stats', '_questions')
 
   async function handleQuizFinish(score, total) {
@@ -215,64 +235,83 @@ export default function LanguagePractice({ course, statsTable, user, stats, onSt
     : null
 
   return (
-    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-8 px-6 py-16">
-      <div className="text-center space-y-1">
-        <h1 className="font-serif text-3xl text-sky-300">
-          {course.flag} Learn {course.name}
-        </h1>
-        <p className="text-zinc-500 text-sm">Level: A1 (Beginner)</p>
-        {accuracy !== null && (
-          <p className="text-zinc-600 text-xs">
-            Lifetime: {stats.total_correct}/{stats.total_answered} correct ({accuracy}%)
-          </p>
-        )}
-      </div>
-
-      <div className="flex flex-wrap justify-center gap-2">
-        {course.categories.map((c) => (
+    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-5 px-4 py-6">
+      {/* Level filter */}
+      <div className="flex justify-center gap-1.5">
+        {LEVELS.map((lvl) => (
           <button
-            key={c.id}
-            onClick={() => {
-              setCategoryId(c.id)
-              setMode('flashcards')
-            }}
-            className={`px-3 py-1.5 rounded-full text-sm border transition ${
-              c.id === categoryId
+            key={lvl}
+            onClick={() => setLevel(lvl)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition ${
+              lvl === level
                 ? 'bg-sky-500 text-zinc-950 border-sky-500'
-                : 'border-zinc-700 text-zinc-300 hover:border-sky-400'
+                : 'border-zinc-700 text-zinc-400 active:border-sky-400'
             }`}
           >
-            {c.title}
+            {lvl}
           </button>
         ))}
       </div>
 
-      <div className="flex justify-center gap-2">
-        <button
-          onClick={() => setMode('flashcards')}
-          className={`px-4 py-1.5 rounded-lg text-sm transition ${
-            mode === 'flashcards' ? 'bg-zinc-100 text-zinc-950' : 'border border-zinc-700 text-zinc-300'
-          }`}
-        >
-          Flashcards
-        </button>
-        <button
-          onClick={() => setMode('quiz')}
-          className={`px-4 py-1.5 rounded-lg text-sm transition ${
-            mode === 'quiz' ? 'bg-zinc-100 text-zinc-950' : 'border border-zinc-700 text-zinc-300'
-          }`}
-        >
-          Quiz
-        </button>
-      </div>
-
-      <div key={`${categoryId}-${mode}-${quizKey}`}>
-        {mode === 'flashcards' ? (
-          <Flashcard items={category.items} />
+      {/* Topic dropdown */}
+      <div className="w-full max-w-sm">
+        {categoriesForLevel.length > 0 ? (
+          <select
+            value={categoryId}
+            onChange={(e) => {
+              setCategoryId(e.target.value)
+              setMode('flashcards')
+            }}
+            className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-sky-400"
+          >
+            {categoriesForLevel.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title}
+              </option>
+            ))}
+          </select>
         ) : (
-          <QuizMCQ table={questionsTable} category={categoryId} onFinish={handleQuizFinish} />
+          <p className="text-center text-zinc-500 text-sm">No topics yet for {level}.</p>
         )}
       </div>
+
+      {accuracy !== null && (
+        <p className="text-zinc-600 text-xs -mt-2">
+          Lifetime: {stats.total_correct}/{stats.total_answered} correct ({accuracy}%)
+        </p>
+      )}
+
+      {/* Mode toggle */}
+      {category && (
+        <div className="flex gap-2 w-full max-w-sm">
+          <button
+            onClick={() => setMode('flashcards')}
+            className={`flex-1 px-4 py-2 rounded-lg text-sm transition ${
+              mode === 'flashcards' ? 'bg-zinc-100 text-zinc-950' : 'border border-zinc-700 text-zinc-300'
+            }`}
+          >
+            Flashcards
+          </button>
+          <button
+            onClick={() => setMode('quiz')}
+            className={`flex-1 px-4 py-2 rounded-lg text-sm transition ${
+              mode === 'quiz' ? 'bg-zinc-100 text-zinc-950' : 'border border-zinc-700 text-zinc-300'
+            }`}
+          >
+            Quiz
+          </button>
+        </div>
+      )}
+
+      {category && (
+        <div key={`${categoryId}-${mode}-${quizKey}`} className="w-full flex justify-center">
+          {mode === 'flashcards' ? (
+            <Flashcard items={category.items} />
+          ) : (
+            <QuizMCQ table={questionsTable} category={categoryId} onFinish={handleQuizFinish} />
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -54,20 +54,22 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
   const [lastSeenAt, setLastSeenAt] = useState({});
   const [resetAtByScope, setResetAtByScope] = useState({});
 
-  // Favorites: question ids the user has starred to revisit later.
+  // Favorites: question ids the user has starred to revisit later. Whether
+  // this instance is favorites-only is fixed for its lifetime by the
+  // lockFavoritesOnly prop (set by the dedicated /favorites page) — there's
+  // no in-page toggle anymore now that favorites have their own page.
   const [favoriteIds, setFavoriteIds] = useState(() => new Set());
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(lockFavoritesOnly);
 
   // Why `question` is currently null, so the UI can show the right empty
   // state: 'no-favorites' | 'no-match' | 'completed' | null.
   const [completionReason, setCompletionReason] = useState(null);
 
-  function scopeKey(level, topic, favoritesOnly) {
-    return `${favoritesOnly ? "favorites" : "all"}|level=${level || "all"}|topic=${topic || "all"}`;
+  function scopeKey(level, topic) {
+    return `level=${level || "all"}|topic=${topic || "all"}`;
   }
 
   function currentCategoryLabel() {
-    if (showFavoritesOnly) {
+    if (lockFavoritesOnly) {
       if (practiceTopic !== "all") return `${practiceTopic} favorites`;
       if (practiceLevel !== "all") return `${practiceLevel} favorites`;
       return "your favorites";
@@ -136,14 +138,12 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
 
   const fetchQuestion = useCallback(
     async (level, topic, avoidId, options = {}) => {
-      const favoritesOnly = options.favoritesOnly ?? showFavoritesOnly;
-
       setLoadingQuestion(true);
       setCompletionReason(null);
       let query = supabase.from("german_questions").select("*");
       if (level && level !== "all") query = query.eq("level", level);
       if (topic && topic !== "all") query = query.eq("topic", topic);
-      if (favoritesOnly) {
+      if (lockFavoritesOnly) {
         const ids = Array.from(favoriteIds);
         if (ids.length === 0) {
           setQuestion(null);
@@ -154,9 +154,9 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
         }
         query = query.in("id", ids);
       }
-      const { data, error } = await query;
+      const { data: rawData, error } = await query;
 
-      if (error || !data || data.length === 0) {
+      if (error || !rawData) {
         console.error("Failed to load question:", error?.message);
         setQuestion(null);
         setPoolSize(0);
@@ -165,28 +165,52 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
         return;
       }
 
-      setPoolSize(data.length);
+      // The main practice flow deliberately excludes favorited questions —
+      // those are considered already-seen material set aside for the
+      // dedicated Favorites page, not the regular rotation.
+      const data = lockFavoritesOnly ? rawData : rawData.filter((q) => !favoriteIds.has(q.id));
 
-      // A question counts as unseen if we've never logged an attempt for
-      // it, or if the last attempt was before this scope's reset time.
-      const resetAt = resetAtByScope[scopeKey(level, topic, favoritesOnly)];
-      const unseen = data.filter((q) => {
-        if (!seenIds.has(q.id)) return true;
-        if (resetAt && lastSeenAt[q.id] && new Date(lastSeenAt[q.id]) < new Date(resetAt)) return true;
-        return false;
-      });
-
-      if (unseen.length === 0) {
-        // Every question in this filter has already been answered — stop
-        // instead of looping back through them, and let the user decide
-        // whether to reset this category.
+      if (data.length === 0) {
         setQuestion(null);
-        setCompletionReason("completed");
+        setPoolSize(0);
+        setCompletionReason(!lockFavoritesOnly && rawData.length > 0 ? "all-favorited" : "no-match");
         setLoadingQuestion(false);
         return;
       }
 
-      let candidates = unseen;
+      setPoolSize(data.length);
+
+      let candidates;
+      if (lockFavoritesOnly) {
+        // Favorites are meant to be revisited on purpose, repeatedly — the
+        // no-repeat gate doesn't apply here, or every already-answered
+        // favorite would immediately look "completed".
+        candidates = data;
+      } else {
+        // A question counts as unseen if we've never logged an attempt for
+        // it, or if the last attempt was before this scope's reset time.
+        // resetAtOverride lets a just-triggered reset take effect on this
+        // very call, since the resetAtByScope state won't have re-rendered
+        // into this closure yet.
+        const resetAt = options.resetAtOverride ?? resetAtByScope[scopeKey(level, topic)];
+        const unseen = data.filter((q) => {
+          if (!seenIds.has(q.id)) return true;
+          if (resetAt && lastSeenAt[q.id] && new Date(lastSeenAt[q.id]) < new Date(resetAt)) return true;
+          return false;
+        });
+
+        if (unseen.length === 0) {
+          // Every question in this filter has already been answered — stop
+          // instead of looping back through them, and let the user decide
+          // whether to reset this category.
+          setQuestion(null);
+          setCompletionReason("completed");
+          setLoadingQuestion(false);
+          return;
+        }
+        candidates = unseen;
+      }
+
       if (candidates.length > 1 && avoidId) {
         const withoutAvoid = candidates.filter((q) => q.id !== avoidId);
         if (withoutAvoid.length > 0) candidates = withoutAvoid;
@@ -196,11 +220,11 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
       setQuestion(pick);
       setLoadingQuestion(false);
     },
-    [seenIds, lastSeenAt, resetAtByScope, favoriteIds, showFavoritesOnly]
+    [seenIds, lastSeenAt, resetAtByScope, favoriteIds, lockFavoritesOnly]
   );
 
   async function resetCurrentCategory() {
-    const key = scopeKey(practiceLevel, practiceTopic, showFavoritesOnly);
+    const key = scopeKey(practiceLevel, practiceTopic);
     const resetAt = new Date().toISOString();
     const { error } = await supabase
       .from("practice_resets")
@@ -212,7 +236,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
     }
     setResetAtByScope((prev) => ({ ...prev, [key]: resetAt }));
     resetQuestionUI();
-    fetchQuestion(practiceLevel, practiceTopic, null);
+    fetchQuestion(practiceLevel, practiceTopic, null, { resetAtOverride: resetAt });
   }
 
   async function toggleFavorite(questionId) {
@@ -249,14 +273,6 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
         });
       }
     }
-  }
-
-  function handleToggleFavoritesOnly() {
-    if (lockFavoritesOnly) return;
-    const next = !showFavoritesOnly;
-    setShowFavoritesOnly(next);
-    resetQuestionUI();
-    fetchQuestion(practiceLevel, practiceTopic, question?.id, { favoritesOnly: next });
   }
 
   const loadTopics = useCallback(async (level) => {
@@ -532,78 +548,236 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
     fetchQuestion(practiceLevel, practiceTopic, question.id);
   }
 
+  let body;
   if (loadingQuestion) {
-    return (
-      <div className="flex-1 bg-black text-zinc-100 flex items-center justify-center">
+    body = (
+      <div className="flex-1 flex items-center justify-center">
         <p className="text-zinc-400">{t.practice.loadingQuestion}</p>
       </div>
     );
-  }
-
-  if (!question) {
+  } else if (!question) {
     if (completionReason === "completed") {
-      return (
-        <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
+      body = (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 text-center">
           <p className="text-2xl">🎉</p>
           <p className="text-xl text-zinc-100">
             Hurray! You&apos;ve completed <span className="text-sky-300">{currentCategoryLabel()}</span>
           </p>
           <p className="text-sm text-zinc-400 max-w-sm">
-            You&apos;ve answered every question here. Reset to go through them again.
+            You&apos;ve answered every question here. Reset to go through them again, or pick a
+            different level or topic above.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={resetCurrentCategory}
-              className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-5 py-2 rounded-xl transition"
-            >
-              Reset and practice again
-            </button>
-            {lockFavoritesOnly && (
-              <Link
-                href="/learning/german"
-                className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
-              >
-                All questions
-              </Link>
-            )}
-          </div>
+          <button
+            onClick={resetCurrentCategory}
+            className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-5 py-2 rounded-xl transition"
+          >
+            Reset and practice again
+          </button>
+        </div>
+      );
+    } else if (completionReason === "all-favorited") {
+      body = (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <p className="text-xl text-zinc-100">
+            You&apos;ve favorited every question in{" "}
+            <span className="text-sky-300">{currentCategoryLabel()}</span>
+          </p>
+          <p className="text-sm text-zinc-400 max-w-sm">
+            They&apos;re all saved for review on your Favorites page. Pick a different level or
+            topic above to keep practicing new questions.
+          </p>
+          <Link
+            href="/learning/german/favorites"
+            className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-5 py-2 rounded-xl transition"
+          >
+            Review favorites
+          </Link>
+        </div>
+      );
+    } else {
+      body = (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <p className="text-zinc-300">
+            {completionReason === "no-favorites"
+              ? "No favorites yet — tap the star on a question to save it here for later."
+              : "No questions match this filter yet."}
+          </p>
         </div>
       );
     }
+  } else {
+    const options = [
+      { key: "a", text: question.option_a },
+      { key: "b", text: question.option_b },
+      { key: "c", text: question.option_c },
+      { key: "d", text: question.option_d },
+    ];
 
-    return (
-      <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-zinc-300">
-          {completionReason === "no-favorites"
-            ? "No favorites yet — tap the star on a question to save it here for later."
-            : "No questions match this filter yet."}
-        </p>
-        {completionReason === "no-favorites" && lockFavoritesOnly && (
-          <Link
-            href="/learning/german"
-            className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
-          >
-            Go practice questions
-          </Link>
+    body = (
+      <>
+        {practiceLevel !== "all" && poolSize !== null && poolSize < 5 && (
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-[11px] text-amber-400">
+              Only {poolSize} question{poolSize === 1 ? "" : "s"} available for this filter.
+            </p>
+            {!generating && !generateSuccess && (
+              <button
+                onClick={generateMoreQuestions}
+                className="text-xs text-sky-300 hover:text-sky-200 underline underline-offset-2 transition"
+              >
+                Generate 5 more
+              </button>
+            )}
+            {generating && <p className="text-xs text-zinc-500">Generating…</p>}
+            {generateSuccess && <p className="text-xs text-emerald-300">{generateSuccess}</p>}
+            {generateError && <p className="text-xs text-rose-300">{generateError}</p>}
+          </div>
         )}
-        {completionReason === "no-favorites" && !lockFavoritesOnly && (
+
+        <div className="flex items-start justify-center gap-2 max-w-md w-full">
+          <p className="text-xl text-center flex-1">{question.question}</p>
           <button
-            onClick={handleToggleFavoritesOnly}
-            className="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
+            onClick={() => toggleFavorite(question.id)}
+            aria-label={favoriteIds.has(question.id) ? "Remove from favorites" : "Add to favorites"}
+            aria-pressed={favoriteIds.has(question.id)}
+            className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-full border transition ${
+              favoriteIds.has(question.id)
+                ? "bg-amber-400/10 border-amber-400 text-amber-300"
+                : "bg-zinc-900 border-zinc-700 text-zinc-500 hover:border-amber-400 hover:text-amber-300"
+            }`}
           >
-            Back to all questions
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill={favoriteIds.has(question.id) ? "currentColor" : "none"}
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <polygon points="12 2.5 15 9 22 10 16.8 14.7 18.2 21.5 12 18 5.8 21.5 7.2 14.7 2 10 9 9 12 2.5" />
+            </svg>
           </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md">
+          {options.map((opt) => {
+            const isCorrectOption = opt.key === question.correct_option;
+            const isSelected = opt.key === selected;
+            let style = "bg-zinc-900 border-zinc-700 hover:bg-zinc-800";
+            if (answered && isCorrectOption) {
+              style = "bg-emerald-900 border-emerald-500 text-emerald-100";
+            } else if (answered && isSelected && !isCorrectOption) {
+              style = "bg-rose-950 border-rose-500 text-rose-100";
+            }
+            return (
+              <button
+                key={opt.key}
+                onClick={() => handleSelect(opt.key)}
+                disabled={answered}
+                className={`border rounded-xl px-4 py-3 text-left transition ${style}`}
+              >
+                {opt.text}
+              </button>
+            );
+          })}
+        </div>
+
+        {answered && (
+          <div className="w-full max-w-md flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className={selected === question.correct_option ? "text-emerald-300" : "text-rose-300"}>
+                {selected === question.correct_option ? t.practice.correctFeedback : t.practice.wrongFeedback}
+              </p>
+              <button
+                onClick={handleNext}
+                className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition shrink-0"
+              >
+                {t.practice.nextQuestion}
+              </button>
+            </div>
+
+            {selected !== question.correct_option && (
+              <div className="w-full flex flex-col gap-2">
+                {!explanation && !explanationLoading && (
+                  <button
+                    onClick={handleExplain}
+                    className="text-xs text-sky-300 hover:text-sky-200 underline underline-offset-2 transition self-start"
+                  >
+                    Explain
+                  </button>
+                )}
+                {explanationLoading && <p className="text-xs text-zinc-500">Thinking…</p>}
+                {explanation && (
+                  <div className="w-full bg-zinc-900 border border-sky-900/50 rounded-xl p-3">
+                    <p className="text-xs text-zinc-300 leading-relaxed">{explanation}</p>
+                  </div>
+                )}
+                {explanationError && <p className="text-xs text-rose-300">{explanationError}</p>}
+              </div>
+            )}
+
+            {communityResults.length > 0 && (
+              <div className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex flex-col gap-1">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wide">
+                  {t.practice.everyoneAnswers}
+                </p>
+                {communityResults.map((r) => (
+                  <p
+                    key={r.user_id}
+                    className={`text-xs ${r.correct ? "text-emerald-300" : "text-rose-300"}`}
+                  >
+                    {r.name}: {r.selected_option.toUpperCase()} {r.correct ? "✓" : "✗"}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {!stats.default_crew_id && (
+              <p className="text-[10px] text-zinc-500">
+                <Link href="/learning/german/leaderboard" className="text-sky-300 hover:text-sky-200 transition">
+                  Pick a crew
+                </Link>{" "}
+                to see how your friends answer these.
+              </p>
+            )}
+
+            {friends.length > 0 && (
+              <div className="flex items-center gap-2">
+                {sendStatus === "sent" ? (
+                  <p className="text-xs text-emerald-300">{t.practice.sent}</p>
+                ) : (
+                  <>
+                    <select
+                      value={selectedFriend}
+                      onChange={(e) => setSelectedFriend(e.target.value)}
+                      className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-sky-400"
+                    >
+                      <option value="">{t.practice.sendPrompt}</option>
+                      {friends.map((f) => (
+                        <option key={f.user_id} value={f.user_id}>
+                          {f.display_name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={sendToFriend}
+                      disabled={!selectedFriend || sendStatus === "sending"}
+                      className="text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-zinc-200 px-3 py-1.5 rounded-lg transition"
+                    >
+                      {sendStatus === "sending" ? t.practice.sending : t.practice.send}
+                    </button>
+                  </>
+                )}
+                {sendStatus === "error" && (
+                  <p className="text-xs text-rose-300">{t.practice.sendError}</p>
+                )}
+              </div>
+            )}
+          </div>
         )}
-      </div>
+      </>
     );
   }
-
-  const options = [
-    { key: "a", text: question.option_a },
-    { key: "b", text: question.option_b },
-    { key: "c", text: question.option_c },
-    { key: "d", text: question.option_d },
-  ];
 
   return (
     <div className="relative flex-1 bg-black text-zinc-100 flex flex-col items-center gap-4 px-6 pt-16 pb-6">
@@ -725,30 +899,6 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
           ))}
         </select>
 
-        {!lockFavoritesOnly && (
-          <button
-            onClick={handleToggleFavoritesOnly}
-            aria-pressed={showFavoritesOnly}
-            className={`flex items-center gap-1 text-xs rounded-lg px-2 py-1.5 border transition ${
-              showFavoritesOnly
-                ? "bg-amber-400/10 border-amber-400 text-amber-300"
-                : "bg-zinc-900 border-zinc-700 text-zinc-200 hover:border-amber-400"
-            }`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="13"
-              height="13"
-              fill={showFavoritesOnly ? "currentColor" : "none"}
-              stroke="currentColor"
-              strokeWidth="1.8"
-            >
-              <polygon points="12 2.5 15 9 22 10 16.8 14.7 18.2 21.5 12 18 5.8 21.5 7.2 14.7 2 10 9 9 12 2.5" />
-            </svg>
-            {favoriteIds.size > 0 ? `Favorites (${favoriteIds.size})` : "Favorites"}
-          </button>
-        )}
-
         {lockFavoritesOnly && (
           <Link
             href="/learning/german"
@@ -763,166 +913,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
         <p className="text-[11px] text-zinc-500">{t.practice.practicingOnly(practiceLevel)}</p>
       )}
 
-      {practiceLevel !== "all" && poolSize !== null && poolSize < 5 && (
-        <div className="flex flex-col items-center gap-1">
-          <p className="text-[11px] text-amber-400">
-            Only {poolSize} question{poolSize === 1 ? "" : "s"} available for this filter.
-          </p>
-          {!generating && !generateSuccess && (
-            <button
-              onClick={generateMoreQuestions}
-              className="text-xs text-sky-300 hover:text-sky-200 underline underline-offset-2 transition"
-            >
-              Generate 5 more
-            </button>
-          )}
-          {generating && <p className="text-xs text-zinc-500">Generating…</p>}
-          {generateSuccess && <p className="text-xs text-emerald-300">{generateSuccess}</p>}
-          {generateError && <p className="text-xs text-rose-300">{generateError}</p>}
-        </div>
-      )}
-
-      <div className="flex items-start justify-center gap-2 max-w-md w-full">
-        <p className="text-xl text-center flex-1">{question.question}</p>
-        <button
-          onClick={() => toggleFavorite(question.id)}
-          aria-label={favoriteIds.has(question.id) ? "Remove from favorites" : "Add to favorites"}
-          aria-pressed={favoriteIds.has(question.id)}
-          className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-full border transition ${
-            favoriteIds.has(question.id)
-              ? "bg-amber-400/10 border-amber-400 text-amber-300"
-              : "bg-zinc-900 border-zinc-700 text-zinc-500 hover:border-amber-400 hover:text-amber-300"
-          }`}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="16"
-            height="16"
-            fill={favoriteIds.has(question.id) ? "currentColor" : "none"}
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <polygon points="12 2.5 15 9 22 10 16.8 14.7 18.2 21.5 12 18 5.8 21.5 7.2 14.7 2 10 9 9 12 2.5" />
-          </svg>
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md">
-        {options.map((opt) => {
-          const isCorrectOption = opt.key === question.correct_option;
-          const isSelected = opt.key === selected;
-          let style = "bg-zinc-900 border-zinc-700 hover:bg-zinc-800";
-          if (answered && isCorrectOption) {
-            style = "bg-emerald-900 border-emerald-500 text-emerald-100";
-          } else if (answered && isSelected && !isCorrectOption) {
-            style = "bg-rose-950 border-rose-500 text-rose-100";
-          }
-          return (
-            <button
-              key={opt.key}
-              onClick={() => handleSelect(opt.key)}
-              disabled={answered}
-              className={`border rounded-xl px-4 py-3 text-left transition ${style}`}
-            >
-              {opt.text}
-            </button>
-          );
-        })}
-      </div>
-
-      {answered && (
-        <div className="w-full max-w-md flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className={selected === question.correct_option ? "text-emerald-300" : "text-rose-300"}>
-              {selected === question.correct_option ? t.practice.correctFeedback : t.practice.wrongFeedback}
-            </p>
-            <button
-              onClick={handleNext}
-              className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-6 py-2 rounded-xl transition shrink-0"
-            >
-              {t.practice.nextQuestion}
-            </button>
-          </div>
-
-          {selected !== question.correct_option && (
-            <div className="w-full flex flex-col gap-2">
-              {!explanation && !explanationLoading && (
-                <button
-                  onClick={handleExplain}
-                  className="text-xs text-sky-300 hover:text-sky-200 underline underline-offset-2 transition self-start"
-                >
-                  Explain
-                </button>
-              )}
-              {explanationLoading && <p className="text-xs text-zinc-500">Thinking…</p>}
-              {explanation && (
-                <div className="w-full bg-zinc-900 border border-sky-900/50 rounded-xl p-3">
-                  <p className="text-xs text-zinc-300 leading-relaxed">{explanation}</p>
-                </div>
-              )}
-              {explanationError && <p className="text-xs text-rose-300">{explanationError}</p>}
-            </div>
-          )}
-
-          {communityResults.length > 0 && (
-            <div className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex flex-col gap-1">
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wide">
-                {t.practice.everyoneAnswers}
-              </p>
-              {communityResults.map((r) => (
-                <p
-                  key={r.user_id}
-                  className={`text-xs ${r.correct ? "text-emerald-300" : "text-rose-300"}`}
-                >
-                  {r.name}: {r.selected_option.toUpperCase()} {r.correct ? "✓" : "✗"}
-                </p>
-              ))}
-            </div>
-          )}
-
-          {!stats.default_crew_id && (
-            <p className="text-[10px] text-zinc-500">
-              <Link href="/learning/german/leaderboard" className="text-sky-300 hover:text-sky-200 transition">
-                Pick a crew
-              </Link>{" "}
-              to see how your friends answer these.
-            </p>
-          )}
-
-          {friends.length > 0 && (
-            <div className="flex items-center gap-2">
-              {sendStatus === "sent" ? (
-                <p className="text-xs text-emerald-300">{t.practice.sent}</p>
-              ) : (
-                <>
-                  <select
-                    value={selectedFriend}
-                    onChange={(e) => setSelectedFriend(e.target.value)}
-                    className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-sky-400"
-                  >
-                    <option value="">{t.practice.sendPrompt}</option>
-                    {friends.map((f) => (
-                      <option key={f.user_id} value={f.user_id}>
-                        {f.display_name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={sendToFriend}
-                    disabled={!selectedFriend || sendStatus === "sending"}
-                    className="text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-zinc-200 px-3 py-1.5 rounded-lg transition"
-                  >
-                    {sendStatus === "sending" ? t.practice.sending : t.practice.send}
-                  </button>
-                </>
-              )}
-              {sendStatus === "error" && (
-                <p className="text-xs text-rose-300">{t.practice.sendError}</p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      {body}
     </div>
   );
 }
