@@ -80,12 +80,12 @@ export default function GermanFavoritesPage() {
   if (!stats?.placement_completed) {
     return (
       <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-zinc-300">Finish your placement test first to start practicing.</p>
+        <p className="text-zinc-300">{t.practice.finishPlacementFirst}</p>
         <Link
           href="/learning/german"
           className="px-5 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium transition"
         >
-          Go to placement test
+          {t.practice.goToPlacement}
         </Link>
       </div>
     )

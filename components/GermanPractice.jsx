@@ -297,13 +297,14 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
     setGenerateError("");
   }
 
-  // Initial load, once. Wait for attempt history + resets so the very
-  // first question picked already respects no-repeat, instead of only
-  // kicking in later.
+  // Initial load, once. Wait for favorites + attempt history + resets so
+  // the very first question fetch has everything it needs — this matters
+  // most on the favorites page, where that first fetch depends entirely on
+  // favoriteIds already being populated (otherwise it looks like there are
+  // no favorites at all, even when there are).
   useEffect(() => {
     loadTopics("all");
-    loadFavorites(user.id);
-    Promise.all([loadAttemptHistory(user.id), loadResets(user.id)]).then(() =>
+    Promise.all([loadFavorites(user.id), loadAttemptHistory(user.id), loadResets(user.id)]).then(() =>
       fetchQuestion("all", "all", null)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -560,37 +561,26 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
       body = (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 text-center">
           <p className="text-2xl">🎉</p>
-          <p className="text-xl text-zinc-100">
-            Hurray! You&apos;ve completed <span className="text-sky-300">{currentCategoryLabel()}</span>
-          </p>
-          <p className="text-sm text-zinc-400 max-w-sm">
-            You&apos;ve answered every question here. Reset to go through them again, or pick a
-            different level or topic above.
-          </p>
+          <p className="text-xl text-zinc-100">{t.practice.completedTitle(currentCategoryLabel())}</p>
+          <p className="text-sm text-zinc-400 max-w-sm">{t.practice.completedDescription}</p>
           <button
             onClick={resetCurrentCategory}
             className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-5 py-2 rounded-xl transition"
           >
-            Reset and practice again
+            {t.practice.resetButton}
           </button>
         </div>
       );
     } else if (completionReason === "all-favorited") {
       body = (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 text-center">
-          <p className="text-xl text-zinc-100">
-            You&apos;ve favorited every question in{" "}
-            <span className="text-sky-300">{currentCategoryLabel()}</span>
-          </p>
-          <p className="text-sm text-zinc-400 max-w-sm">
-            They&apos;re all saved for review on your Favorites page. Pick a different level or
-            topic above to keep practicing new questions.
-          </p>
+          <p className="text-xl text-zinc-100">{t.practice.allFavoritedTitle(currentCategoryLabel())}</p>
+          <p className="text-sm text-zinc-400 max-w-sm">{t.practice.allFavoritedDescription}</p>
           <Link
             href="/learning/german/favorites"
             className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-medium px-5 py-2 rounded-xl transition"
           >
-            Review favorites
+            {t.practice.reviewFavoritesButton}
           </Link>
         </div>
       );
@@ -598,9 +588,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
       body = (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6 text-center">
           <p className="text-zinc-300">
-            {completionReason === "no-favorites"
-              ? "No favorites yet — tap the star on a question to save it here for later."
-              : "No questions match this filter yet."}
+            {completionReason === "no-favorites" ? t.practice.noFavoritesYet : t.practice.noQuestionsMatchFilter}
           </p>
         </div>
       );
@@ -617,18 +605,16 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
       <>
         {practiceLevel !== "all" && poolSize !== null && poolSize < 5 && (
           <div className="flex flex-col items-center gap-1">
-            <p className="text-[11px] text-amber-400">
-              Only {poolSize} question{poolSize === 1 ? "" : "s"} available for this filter.
-            </p>
+            <p className="text-[11px] text-amber-400">{t.practice.onlyNQuestionsAvailable(poolSize)}</p>
             {!generating && !generateSuccess && (
               <button
                 onClick={generateMoreQuestions}
                 className="text-xs text-sky-300 hover:text-sky-200 underline underline-offset-2 transition"
               >
-                Generate 5 more
+                {t.practice.generateMore}
               </button>
             )}
-            {generating && <p className="text-xs text-zinc-500">Generating…</p>}
+            {generating && <p className="text-xs text-zinc-500">{t.practice.generating}</p>}
             {generateSuccess && <p className="text-xs text-emerald-300">{generateSuccess}</p>}
             {generateError && <p className="text-xs text-rose-300">{generateError}</p>}
           </div>
@@ -638,7 +624,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
           <p className="text-xl text-center flex-1">{question.question}</p>
           <button
             onClick={() => toggleFavorite(question.id)}
-            aria-label={favoriteIds.has(question.id) ? "Remove from favorites" : "Add to favorites"}
+            aria-label={favoriteIds.has(question.id) ? t.practice.removeFromFavorites : t.practice.addToFavorites}
             aria-pressed={favoriteIds.has(question.id)}
             className={`shrink-0 w-8 h-8 flex items-center justify-center rounded-full border transition ${
               favoriteIds.has(question.id)
@@ -703,10 +689,10 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
                     onClick={handleExplain}
                     className="text-xs text-sky-300 hover:text-sky-200 underline underline-offset-2 transition self-start"
                   >
-                    Explain
+                    {t.practice.explain}
                   </button>
                 )}
-                {explanationLoading && <p className="text-xs text-zinc-500">Thinking…</p>}
+                {explanationLoading && <p className="text-xs text-zinc-500">{t.practice.thinking}</p>}
                 {explanation && (
                   <div className="w-full bg-zinc-900 border border-sky-900/50 rounded-xl p-3">
                     <p className="text-xs text-zinc-300 leading-relaxed">{explanation}</p>
@@ -838,7 +824,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
               onClick={() => setMenuOpen(false)}
               className="px-4 py-4 text-base text-zinc-200 hover:bg-zinc-800 transition"
             >
-              Favorites
+              {t.practice.favoritesMenuLabel}
             </Link>
             <Link
               href="/learning/german/inbox"
@@ -904,7 +890,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
             href="/learning/german"
             className="flex items-center gap-1 text-xs rounded-lg px-2 py-1.5 border border-zinc-700 text-zinc-200 hover:border-sky-400 transition"
           >
-            All questions
+            {t.practice.allQuestionsLink}
           </Link>
         )}
       </div>
