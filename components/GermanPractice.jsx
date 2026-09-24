@@ -59,6 +59,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
   // lockFavoritesOnly prop (set by the dedicated /favorites page) — there's
   // no in-page toggle anymore now that favorites have their own page.
   const [favoriteIds, setFavoriteIds] = useState(() => new Set());
+  const [favoriteError, setFavoriteError] = useState("");
 
   // Why `question` is currently null, so the UI can show the right empty
   // state: 'no-favorites' | 'no-match' | 'completed' | null.
@@ -93,7 +94,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
 
     if (error) {
       console.error("Failed to load attempt history:", error.message);
-      return;
+      return { ids: new Set(), lastSeen: {} };
     }
 
     const ids = new Set();
@@ -104,6 +105,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
     }
     setSeenIds(ids);
     setLastSeenAt(lastSeen);
+    return { ids, lastSeen };
   }, []);
 
   const loadResets = useCallback(async (userId) => {
@@ -114,13 +116,14 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
 
     if (error) {
       console.error("Failed to load practice resets:", error.message);
-      return;
+      return {};
     }
     const map = {};
     for (const row of data || []) {
       map[row.scope_key] = row.reset_at;
     }
     setResetAtByScope(map);
+    return map;
   }, []);
 
   const loadFavorites = useCallback(async (userId) => {
@@ -131,20 +134,34 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
 
     if (error) {
       console.error("Failed to load favorites:", error.message);
-      return;
+      setFavoriteError(error.message);
+      return new Set();
     }
-    setFavoriteIds(new Set((data || []).map((r) => r.question_id)));
+    const ids = new Set((data || []).map((r) => r.question_id));
+    setFavoriteIds(ids);
+    return ids;
   }, []);
 
   const fetchQuestion = useCallback(
     async (level, topic, avoidId, options = {}) => {
+      // These can be overridden with freshly-loaded values instead of
+      // reading React state, because the very first call (from the mount
+      // effect) happens through a closure captured before loadFavorites /
+      // loadAttemptHistory / loadResets have finished updating state —
+      // that closure would otherwise always see the empty initial values,
+      // permanently, no matter what state updates to later.
+      const favIds = options.favoriteIdsOverride ?? favoriteIds;
+      const seen = options.seenIdsOverride ?? seenIds;
+      const lastSeen = options.lastSeenAtOverride ?? lastSeenAt;
+      const resetMap = options.resetAtByScopeOverride ?? resetAtByScope;
+
       setLoadingQuestion(true);
       setCompletionReason(null);
       let query = supabase.from("german_questions").select("*");
       if (level && level !== "all") query = query.eq("level", level);
       if (topic && topic !== "all") query = query.eq("topic", topic);
       if (lockFavoritesOnly) {
-        const ids = Array.from(favoriteIds);
+        const ids = Array.from(favIds);
         if (ids.length === 0) {
           setQuestion(null);
           setPoolSize(0);
@@ -168,7 +185,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
       // The main practice flow deliberately excludes favorited questions —
       // those are considered already-seen material set aside for the
       // dedicated Favorites page, not the regular rotation.
-      const data = lockFavoritesOnly ? rawData : rawData.filter((q) => !favoriteIds.has(q.id));
+      const data = lockFavoritesOnly ? rawData : rawData.filter((q) => !favIds.has(q.id));
 
       if (data.length === 0) {
         setQuestion(null);
@@ -189,13 +206,10 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
       } else {
         // A question counts as unseen if we've never logged an attempt for
         // it, or if the last attempt was before this scope's reset time.
-        // resetAtOverride lets a just-triggered reset take effect on this
-        // very call, since the resetAtByScope state won't have re-rendered
-        // into this closure yet.
-        const resetAt = options.resetAtOverride ?? resetAtByScope[scopeKey(level, topic)];
+        const resetAt = options.resetAtOverride ?? resetMap[scopeKey(level, topic)];
         const unseen = data.filter((q) => {
-          if (!seenIds.has(q.id)) return true;
-          if (resetAt && lastSeenAt[q.id] && new Date(lastSeenAt[q.id]) < new Date(resetAt)) return true;
+          if (!seen.has(q.id)) return true;
+          if (resetAt && lastSeen[q.id] && new Date(lastSeen[q.id]) < new Date(resetAt)) return true;
           return false;
         });
 
@@ -241,6 +255,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
 
   async function toggleFavorite(questionId) {
     const isFavorited = favoriteIds.has(questionId);
+    setFavoriteError("");
 
     // Optimistic update so the star responds immediately.
     setFavoriteIds((prev) => {
@@ -258,6 +273,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
         .eq("question_id", questionId);
       if (error) {
         console.error("Failed to remove favorite:", error.message);
+        setFavoriteError(error.message);
         setFavoriteIds((prev) => new Set(prev).add(questionId)); // revert
       }
     } else {
@@ -266,6 +282,7 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
         .insert({ user_id: user.id, question_id: questionId });
       if (error) {
         console.error("Failed to add favorite:", error.message);
+        setFavoriteError(error.message);
         setFavoriteIds((prev) => {
           const next = new Set(prev);
           next.delete(questionId); // revert
@@ -297,16 +314,27 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
     setGenerateError("");
   }
 
-  // Initial load, once. Wait for favorites + attempt history + resets so
-  // the very first question fetch has everything it needs — this matters
-  // most on the favorites page, where that first fetch depends entirely on
-  // favoriteIds already being populated (otherwise it looks like there are
-  // no favorites at all, even when there are).
+  // Initial load, once. The mount effect's closure over fetchQuestion is
+  // captured before loadFavorites / loadAttemptHistory / loadResets ever
+  // finish — calling fetchQuestion() plain here would permanently use the
+  // empty initial state no matter what those loads later put into React
+  // state. So we pass what they resolve to straight into this one call
+  // instead of depending on the closure to have "seen" the updates.
   useEffect(() => {
     loadTopics("all");
-    Promise.all([loadFavorites(user.id), loadAttemptHistory(user.id), loadResets(user.id)]).then(() =>
-      fetchQuestion("all", "all", null)
-    );
+    (async () => {
+      const [favIds, history, resetMap] = await Promise.all([
+        loadFavorites(user.id),
+        loadAttemptHistory(user.id),
+        loadResets(user.id),
+      ]);
+      fetchQuestion("all", "all", null, {
+        favoriteIdsOverride: favIds,
+        seenIdsOverride: history.ids,
+        lastSeenAtOverride: history.lastSeen,
+        resetAtByScopeOverride: resetMap,
+      });
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -898,6 +926,8 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
       {practiceLevel !== "all" && (
         <p className="text-[11px] text-zinc-500">{t.practice.practicingOnly(practiceLevel)}</p>
       )}
+
+      {favoriteError && <p className="text-[11px] text-rose-300 max-w-md text-center">{favoriteError}</p>}
 
       {body}
     </div>
