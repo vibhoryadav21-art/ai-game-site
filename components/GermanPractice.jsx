@@ -34,6 +34,8 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
   const [explanationLoading, setExplanationLoading] = useState(false);
   const [explanationError, setExplanationError] = useState("");
   const [poolSize, setPoolSize] = useState(null);
+  const [favoritePosition, setFavoritePosition] = useState(null);
+  const [favoriteTotal, setFavoriteTotal] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState("");
   const [generateSuccess, setGenerateSuccess] = useState("");
@@ -232,6 +234,19 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
 
       const pick = candidates[Math.floor(Math.random() * candidates.length)];
       setQuestion(pick);
+
+      if (lockFavoritesOnly) {
+        // A stable order (not the random pick order) so "3 of 12" means the
+        // same thing each time you land on that question, rather than
+        // shuffling every visit.
+        const sorted = [...data].sort((a, b) => a.id.localeCompare(b.id));
+        setFavoritePosition(sorted.findIndex((q) => q.id === pick.id) + 1);
+        setFavoriteTotal(data.length);
+      } else {
+        setFavoritePosition(null);
+        setFavoriteTotal(null);
+      }
+
       setLoadingQuestion(false);
     },
     [seenIds, lastSeenAt, resetAtByScope, favoriteIds, lockFavoritesOnly]
@@ -337,6 +352,19 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Safety net: favorites are confirmed to load correctly into state (this
+  // has been verified against the actual network response). If the page
+  // ever ends up showing "no favorites" while favoriteIds actually has
+  // entries — from a race, a bfcache-restored view, or anything else that
+  // slips past the override above — retry automatically with current
+  // state instead of leaving the person stuck on a wrong screen.
+  useEffect(() => {
+    if (lockFavoritesOnly && completionReason === "no-favorites" && favoriteIds.size > 0) {
+      fetchQuestion(practiceLevel, practiceTopic, null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [favoriteIds, completionReason, lockFavoritesOnly]);
 
   useEffect(() => {
     async function loadFriends() {
@@ -646,6 +674,10 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
             {generateSuccess && <p className="text-xs text-emerald-300">{generateSuccess}</p>}
             {generateError && <p className="text-xs text-rose-300">{generateError}</p>}
           </div>
+        )}
+
+        {lockFavoritesOnly && favoritePosition && favoriteTotal && (
+          <p className="text-[11px] text-zinc-500">{t.practice.favoritePosition(favoritePosition, favoriteTotal)}</p>
         )}
 
         <div className="flex items-start justify-center gap-2 max-w-md w-full">
