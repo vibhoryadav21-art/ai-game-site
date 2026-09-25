@@ -199,13 +199,21 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
 
       setPoolSize(data.length);
 
-      let candidates;
+      let pick;
       if (lockFavoritesOnly) {
-        // Favorites are meant to be revisited on purpose, repeatedly — the
-        // no-repeat gate doesn't apply here, or every already-answered
-        // favorite would immediately look "completed".
-        candidates = data;
+        // Step through favorites in a fixed order (not random) so the
+        // "3 of 12" counter actually counts up as you go, instead of
+        // jumping around. Wraps back to the start after the last one.
+        const sorted = [...data].sort((a, b) => a.id.localeCompare(b.id));
+        const previousIndex = avoidId ? sorted.findIndex((q) => q.id === avoidId) : -1;
+        const nextIndex = (previousIndex + 1) % sorted.length;
+        pick = sorted[nextIndex];
+        setFavoritePosition(nextIndex + 1);
+        setFavoriteTotal(sorted.length);
       } else {
+        setFavoritePosition(null);
+        setFavoriteTotal(null);
+
         // A question counts as unseen if we've never logged an attempt for
         // it, or if the last attempt was before this scope's reset time.
         const resetAt = options.resetAtOverride ?? resetMap[scopeKey(level, topic)];
@@ -224,29 +232,16 @@ export default function GermanPractice({ user, stats, onStatsChange, lockFavorit
           setLoadingQuestion(false);
           return;
         }
-        candidates = unseen;
+
+        let candidates = unseen;
+        if (candidates.length > 1 && avoidId) {
+          const withoutAvoid = candidates.filter((q) => q.id !== avoidId);
+          if (withoutAvoid.length > 0) candidates = withoutAvoid;
+        }
+        pick = candidates[Math.floor(Math.random() * candidates.length)];
       }
 
-      if (candidates.length > 1 && avoidId) {
-        const withoutAvoid = candidates.filter((q) => q.id !== avoidId);
-        if (withoutAvoid.length > 0) candidates = withoutAvoid;
-      }
-
-      const pick = candidates[Math.floor(Math.random() * candidates.length)];
       setQuestion(pick);
-
-      if (lockFavoritesOnly) {
-        // A stable order (not the random pick order) so "3 of 12" means the
-        // same thing each time you land on that question, rather than
-        // shuffling every visit.
-        const sorted = [...data].sort((a, b) => a.id.localeCompare(b.id));
-        setFavoritePosition(sorted.findIndex((q) => q.id === pick.id) + 1);
-        setFavoriteTotal(data.length);
-      } else {
-        setFavoritePosition(null);
-        setFavoriteTotal(null);
-      }
-
       setLoadingQuestion(false);
     },
     [seenIds, lastSeenAt, resetAtByScope, favoriteIds, lockFavoritesOnly]
