@@ -5,6 +5,7 @@ import NavBar from "@/components/NavBar";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { FeedbackProvider } from "@/context/FeedbackContext";
+import { GoogleAnalytics } from "@next/third-parties/google";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <FeedbackWidget />
           </FeedbackProvider>
         </LanguageProvider>
+        <GoogleAnalytics gaId="G-1SPK6B5J3T" />
       </body>
     </html>
   );
