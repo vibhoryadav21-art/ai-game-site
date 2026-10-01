@@ -14,6 +14,15 @@ import {
 } from '@/lib/dohatti/engine'
 import PlayingCard from '@/components/dohatti/PlayingCard'
 
+const RANK_LABEL = { 11: 'J', 12: 'Q', 13: 'K', 14: 'A' }
+const cardText = (card) => `${RANK_LABEL[rankOf(card)] || rankOf(card)}${SUIT_SYMBOL[suitOf(card)]}`
+
+const SOURCE_LABEL = {
+  llm: 'AI model',
+  rules: 'rule bot',
+  'rules-fallback': 'rule bot (AI model failed)',
+}
+
 // Screen position of a seat, relative to me (0 = me at the bottom).
 const POS = {
   0: 'col-start-2 row-start-3',
@@ -210,6 +219,18 @@ export default function Table({ room, seats, me, isHost }) {
         {status}
       </p>
       {error && <p className="text-sm text-red-400">{error}</p>}
+
+      {/* What the last AI player did */}
+      {game.aiNote && !finished && (
+        <p className="text-xs text-zinc-500 text-center max-w-md">
+          🤖 {nameOf(game.aiNote.seat)}{' '}
+          {game.aiNote.kind === 'trump'
+            ? 'chose the trump suit'
+            : `played ${cardText(game.aiNote.card)}`}{' '}
+          · {SOURCE_LABEL[game.aiNote.source] || game.aiNote.source}
+          {game.aiNote.text ? ` · “${game.aiNote.text}”` : ''}
+        </p>
+      )}
 
       {/* Trump choice */}
       {choosingTrump && myTurn && (
