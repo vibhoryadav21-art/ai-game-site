@@ -20,14 +20,14 @@ export default function GamesHubPage() {
           <span className="text-xs text-emerald-300">{t.games.higherLowerDesc}</span>
         </Link>
 
-        <div className="bg-emerald-900/40 border border-emerald-700/20 rounded-2xl p-6 flex flex-col gap-2 opacity-50 cursor-not-allowed">
+        <Link
+          href="/games/dohatti"
+          className="bg-emerald-900 hover:bg-emerald-800 border border-emerald-700/40 rounded-2xl p-6 flex flex-col gap-2 transition"
+        >
           <span className="text-3xl">🂮</span>
           <span className="font-medium text-emerald-100">{t.games.doHatti}</span>
           <span className="text-xs text-emerald-300">{t.games.doHattiDesc}</span>
-          <span className="text-[10px] uppercase tracking-wide text-sky-400 mt-1">
-            {t.games.comingSoon}
-          </span>
-        </div>
+        </Link>
       </div>
     </div>
   )
