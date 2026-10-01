@@ -4,16 +4,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
-import { getPlayerId, getPlayerName } from '@/lib/dohattiIdentity'
+import { ensureIdentity, getPlayerName, getPlayerSecret } from '@/lib/dohattiIdentity'
+import { postJson } from '@/lib/dohatti/api'
 import {
   getRoomByCode,
   getSeats,
   claimSeat,
   setSeatAI,
   fillWithAI,
-  startGame,
   leaveRoom,
 } from '@/lib/dohattiRooms'
+import Table from '@/components/dohatti/Table'
 
 // seat 0 = bottom, 1 = left, 2 = top, 3 = right
 const SEAT_POSITION = {
@@ -48,12 +49,12 @@ export default function DoHattiRoomPage() {
     startedRef.current = true
 
     async function init() {
-      const playerId = getPlayerId()
       const name = getPlayerName()
       if (!name) {
         router.replace(`/games/dohatti?code=${code}`)
         return
       }
+      const playerId = await ensureIdentity()
       setMe(playerId)
 
       try {
@@ -140,7 +141,8 @@ export default function DoHattiRoomPage() {
 
   const toggleAI = (seat, makeAI) => run(() => setSeatAI(room.id, seat, makeAI))
   const fillAll = () => run(() => fillWithAI(room.id))
-  const start = () => run(() => startGame(room.id))
+  const start = () =>
+    run(() => postJson('/api/dohatti/start', { roomId: room.id, secret: getPlayerSecret() }))
 
   async function leave() {
     try {
@@ -176,7 +178,7 @@ export default function DoHattiRoomPage() {
   const allFilled = seats.length === 4 && seats.every((s) => s.player_id || s.is_ai)
 
   return (
-    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-6 px-6 py-12">
+    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-6 px-4 py-10">
       <h1 className="font-serif text-3xl text-sky-300">Do Hatti</h1>
 
       <div className="flex items-center gap-3">
@@ -191,10 +193,7 @@ export default function DoHattiRoomPage() {
       </div>
 
       {room.status === 'playing' ? (
-        <div className="bg-emerald-900/40 border border-emerald-700/30 rounded-2xl p-8 text-center">
-          <p className="text-emerald-100 font-medium">The game has started.</p>
-          <p className="text-xs text-emerald-300 mt-1">The card table is the next thing we build.</p>
-        </div>
+        <Table room={room} seats={seats} me={me} isHost={isHost} />
       ) : (
         <>
           <div className="grid grid-cols-3 grid-rows-3 gap-3 w-full max-w-xl">
@@ -245,6 +244,8 @@ export default function DoHattiRoomPage() {
           )}
         </>
       )}
+
+      {room.status === 'playing' && error && <p className="text-sm text-red-400">{error}</p>}
 
       <button onClick={leave} className="text-sm text-zinc-500 hover:text-zinc-300">
         Leave room

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getPlayerId, getPlayerName, setPlayerName } from '@/lib/dohattiIdentity'
+import { ensureIdentity, getPlayerName, setPlayerName } from '@/lib/dohattiIdentity'
 import { createRoom, getRoomByCode } from '@/lib/dohattiRooms'
 
 export default function DoHattiLobbyPage() {
@@ -14,6 +14,7 @@ export default function DoHattiLobbyPage() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
+    ensureIdentity()
     setName(getPlayerName())
     const fromUrl = new URLSearchParams(window.location.search).get('code')
     if (fromUrl) setCode(fromUrl.toUpperCase())
@@ -33,7 +34,8 @@ export default function DoHattiLobbyPage() {
     if (!requireName()) return
     setBusy(true)
     try {
-      const room = await createRoom(getPlayerId(), name.trim())
+      const playerId = await ensureIdentity()
+      const room = await createRoom(playerId, name.trim())
       router.push(`/games/dohatti/${room.code}`)
     } catch (e) {
       setError(e.message || 'Could not create the room.')
@@ -50,6 +52,7 @@ export default function DoHattiLobbyPage() {
     }
     setBusy(true)
     try {
+      await ensureIdentity()
       const room = await getRoomByCode(code)
       if (!room) {
         setError('No room with that code.')
