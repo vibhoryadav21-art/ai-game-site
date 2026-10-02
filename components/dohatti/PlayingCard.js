@@ -9,11 +9,12 @@ export default function PlayingCard({
   onClick,
   disabled = false,
   selected = false,
+  dim = false,
   size = 'md',
 }) {
-  const dims = size === 'sm' ? 'w-9 h-12' : 'w-11 h-16'
-  const rankText = size === 'sm' ? 'text-xs' : 'text-sm'
-  const suitText = size === 'sm' ? 'text-base' : 'text-xl'
+  const dims = size === 'sm' ? 'w-10 h-14' : 'w-12 h-[4.5rem]'
+  const rankText = size === 'sm' ? 'text-sm' : 'text-lg'
+  const suitText = size === 'sm' ? 'text-xl' : 'text-3xl'
 
   if (faceDown || !card) {
     return <div className={`${dims} rounded-md border border-sky-700 bg-sky-900`} />
@@ -22,7 +23,9 @@ export default function PlayingCard({
   const suit = suitOf(card)
   const label = RANK_LABEL[rankOf(card)] || String(rankOf(card))
   const color = suit === 'H' || suit === 'D' ? 'text-red-600' : 'text-zinc-900'
-  const base = `${dims} rounded-md border bg-white flex flex-col items-center justify-center leading-none font-semibold ${color}`
+  const base = `${dims} rounded-md border bg-white flex flex-col items-center justify-center leading-none font-semibold ${color} ${
+    dim ? 'opacity-70' : ''
+  }`
 
   const face = (
     <>

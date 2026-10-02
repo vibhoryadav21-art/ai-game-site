@@ -9,7 +9,7 @@ import {
   SUITS,
   SUIT_SYMBOL,
   SUIT_NAME,
-  legalCards,
+  legalPlays,
   suitOf,
   rankOf,
 } from '@/lib/dohatti/engine'
@@ -17,7 +17,7 @@ import PlayingCard from '@/components/dohatti/PlayingCard'
 
 const RANK_LABEL = { 11: 'J', 12: 'Q', 13: 'K', 14: 'A' }
 const cardText = (card) => `${RANK_LABEL[rankOf(card)] || rankOf(card)}${SUIT_SYMBOL[suitOf(card)]}`
-const teamName = (team) => (team === 0 ? 'A' : 'B')
+const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0')
 
 const SOURCE_LABEL = {
   llm: 'AI model',
@@ -25,12 +25,13 @@ const SOURCE_LABEL = {
   'rules-fallback': 'rule bot (AI model failed)',
 }
 
-// Position inside the little trick area, relative to me (0 = me at the bottom).
+// Position inside the trick area. I sit at the TOP, my partner at the BOTTOM.
+// Order clockwise from me: me (top) -> next seat (right) -> partner (bottom) -> last seat (left).
 const TRICK_POS = {
-  0: 'col-start-2 row-start-3',
-  1: 'col-start-1 row-start-2',
-  2: 'col-start-2 row-start-1',
-  3: 'col-start-3 row-start-2',
+  0: 'col-start-2 row-start-1',
+  1: 'col-start-3 row-start-2',
+  2: 'col-start-2 row-start-3',
+  3: 'col-start-1 row-start-2',
 }
 
 function formatDuration(totalSeconds) {
@@ -64,9 +65,12 @@ export default function Table({ room, seats, me, isHost }) {
 
   const mySeat = seats.find((s) => s.player_id === me)?.seat ?? 0
   const myTeam = mySeat % 2
+  const partnerSeat = (mySeat + 2) % 4
   const nameOf = (seat) => seats.find((s) => s.seat === seat)?.display_name || `Seat ${seat + 1}`
   const screenPos = (seat) => (seat - mySeat + 4) % 4
   const seatAt = (pos) => (mySeat + pos) % 4
+  const myTally = (pair) => (myTeam === 0 ? pair[0] : pair[1])
+  const teamLabel = (team) => (team === myTeam ? 'Your team' : 'Opponents')
 
   const applyState = useCallback((incoming) => {
     setGame((prev) => (!prev || (incoming.version ?? 0) >= (prev.version ?? 0) ? incoming : prev))
@@ -154,7 +158,7 @@ export default function Table({ room, seats, me, isHost }) {
   const action = (body) => act('/api/dohatti/action', body)
 
   if (!game) {
-    return <p className="text-zinc-400 text-sm">Dealing the cards…</p>
+    return <p className="text-zinc-400 text-base">Dealing the cards…</p>
   }
 
   const { phase } = game
@@ -164,7 +168,12 @@ export default function Table({ room, seats, me, isHost }) {
   const finished = phase === 'finished'
   const myTurn = !finished && game.turn === mySeat
   const iAmCaller = game.caller === mySeat
-  const legal = playing && myTurn ? legalCards(hand, game.trick) : []
+  const legal = playing && myTurn ? legalPlays(game, hand, mySeat) : []
+
+  // Out of the suit that was led, trump still hidden, and I am not the caller: I may reveal.
+  const ledSuit = game.trick.length > 0 ? suitOf(game.trick[0].card) : null
+  const iAmVoid = !!ledSuit && !hand.some((c) => suitOf(c) === ledSuit)
+  const canRevealAsVoid = playing && myTurn && !iAmCaller && !game.trumpRevealed && iAmVoid
 
   const sortedHand = [...hand].sort(
     (a, b) => SUITS.indexOf(suitOf(a)) - SUITS.indexOf(suitOf(b)) || rankOf(b) - rankOf(a)
@@ -183,9 +192,7 @@ export default function Table({ room, seats, me, isHost }) {
   // ---- status line ----
   let status
   if (finished) {
-    status = game.result.made
-      ? `Team ${teamName(game.result.callingTeam)} made the bid`
-      : `Team ${teamName(game.result.callingTeam)} missed the bid`
+    status = `${teamLabel(game.result.callingTeam)} ${game.result.made ? 'made' : 'missed'} the bid`
   } else if (bidding) {
     status = myTurn ? 'Your bid' : `Waiting for ${nameOf(game.turn)} to bid…`
   } else if (choosing) {
@@ -205,55 +212,63 @@ export default function Table({ room, seats, me, isHost }) {
     return busy || !legal.includes(card)
   }
 
+  const myTallyNow = myTally(game.scores)
+
   return (
-    <div className="w-full max-w-md flex flex-col items-center gap-3">
-      {/* Slim info strip */}
-      <div className="w-full text-[11px] bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 flex flex-col gap-1">
+    <div className="w-full max-w-md flex flex-col items-center gap-3 text-base">
+      {/* Info strip */}
+      <div className="w-full text-sm bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 flex flex-col gap-1.5">
         <div className="flex justify-between text-zinc-400">
           <span>
             ⏱ {formatDuration(matchSeconds)} · Game {game.gameNo} ({formatDuration(gameSeconds)})
           </span>
           <span>
-            Courts A {game.courts[0]} – B {game.courts[1]}
+            Courts: {myTally(game.courts)} – {game.courts[1 - myTeam]}
           </span>
         </div>
-        <div className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-zinc-300">
-          <span>
-            Tally{' '}
-            <span className={game.scores[0] < 0 ? 'text-red-400' : ''}>A {game.scores[0]}</span> ·{' '}
-            <span className={game.scores[1] < 0 ? 'text-red-400' : ''}>B {game.scores[1]}</span>
+        <div className="flex justify-between items-baseline">
+          <span className="text-zinc-300">Your team</span>
+          <span className={`text-xl font-semibold ${myTallyNow < 0 ? 'text-red-400' : myTallyNow > 0 ? 'text-emerald-300' : 'text-zinc-200'}`}>
+            {signed(myTallyNow)}
           </span>
-          {game.bid && (
-            <span>
-              Bid: Team {teamName(game.callingTeam)} {game.bid}
-            </span>
-          )}
+        </div>
+        <div className="text-sky-300">
+          Your team: {nameOf(mySeat)} + {nameOf(partnerSeat)}
+        </div>
+        <div className="text-amber-300">
+          Opponents: {nameOf(seatAt(1))} + {nameOf(seatAt(3))}
         </div>
         {game.bid && (
-          <div className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-zinc-300">
+          <div className="flex flex-wrap justify-between gap-x-3 text-zinc-300">
             <span>
-              Points A {game.points[0]} – B {game.points[1]} · Pile {game.pot}
+              Bid: {teamLabel(game.callingTeam)} {game.bid}
             </span>
             <span>
-              Trump:{' '}
-              {game.trumpRevealed ? (
-                <span className="font-semibold">
-                  {SUIT_SYMBOL[game.trump]} {SUIT_NAME[game.trump]}
-                </span>
-              ) : hiddenCard ? (
-                <span className="font-semibold">{SUIT_SYMBOL[suitOf(hiddenCard)]} (hidden)</span>
-              ) : (
-                'hidden'
-              )}
+              Points {myTally(game.points)}–{game.points[1 - myTeam]} · Pile {game.pot}
             </span>
+          </div>
+        )}
+        {game.bid && (
+          <div className="text-zinc-300">
+            Trump:{' '}
+            {game.trumpRevealed ? (
+              <span className="font-semibold">
+                {SUIT_SYMBOL[game.trump]} {SUIT_NAME[game.trump]}{' '}
+                <span className="text-zinc-500 font-normal">(revealed by {nameOf(game.revealedBy)})</span>
+              </span>
+            ) : hiddenCard ? (
+              <span className="font-semibold">{SUIT_SYMBOL[suitOf(hiddenCard)]} hidden (only you know)</span>
+            ) : (
+              'hidden'
+            )}
           </div>
         )}
       </div>
 
       {/* Status */}
-      <p className={`text-base font-medium ${myTurn ? 'text-emerald-300' : 'text-zinc-300'}`}>{status}</p>
+      <p className={`text-xl font-semibold text-center ${myTurn ? 'text-emerald-300' : 'text-zinc-300'}`}>{status}</p>
       {game.aiNote && !finished && (
-        <p className="text-[11px] text-zinc-500 text-center -mt-2">
+        <p className="text-sm text-zinc-500 text-center -mt-1">
           🤖 {nameOf(game.aiNote.seat)}{' '}
           {game.aiNote.kind === 'bid'
             ? game.aiNote.bid === 'pass'
@@ -261,28 +276,28 @@ export default function Table({ room, seats, me, isHost }) {
               : `bid ${game.aiNote.bid}`
             : game.aiNote.kind === 'trump'
               ? 'hid the trump card'
-              : `played ${cardText(game.aiNote.card)}`}{' '}
+              : `${game.aiNote.revealed ? 'revealed trump and ' : ''}played ${cardText(game.aiNote.card)}`}{' '}
           · {SOURCE_LABEL[game.aiNote.source] || game.aiNote.source}
           {game.aiNote.text ? ` · “${game.aiNote.text}”` : ''}
         </p>
       )}
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p className="text-base text-red-400 text-center">{error}</p>}
 
       {/* ME + MY CARDS, at the top */}
       <div
-        className={`w-full rounded-xl border px-2 py-2 flex flex-col items-center gap-2 ${
-          myTeam === 0 ? 'border-sky-500/50' : 'border-amber-500/50'
-        } ${myTurn ? 'ring-2 ring-emerald-400 bg-emerald-950/30' : 'bg-zinc-900'}`}
+        className={`w-full rounded-xl border-2 px-2 py-2.5 flex flex-col items-center gap-2.5 border-sky-500/60 ${
+          myTurn ? 'ring-2 ring-emerald-400 bg-emerald-950/30' : 'bg-zinc-900'
+        }`}
       >
-        <div className="w-full flex items-center justify-between text-xs px-1">
+        <div className="w-full flex items-center justify-between text-sm px-1">
           <span>
-            {nameOf(mySeat)} <span className="text-emerald-300">(you)</span> · Team {teamName(myTeam)}
+            {nameOf(mySeat)} <span className="text-emerald-300">(you)</span>
             {game.dealer === mySeat ? ' · 🃏 dealer' : ''}
             {iAmCaller ? ' · 🎯 caller' : ''}
           </span>
           <span className="text-zinc-500">{game.handSizes[mySeat]} cards</span>
         </div>
-        <div className="flex flex-wrap justify-center gap-1">
+        <div className="flex flex-wrap justify-center gap-1.5">
           {sortedHand.map((card) => (
             <PlayingCard
               key={card}
@@ -293,19 +308,36 @@ export default function Table({ room, seats, me, isHost }) {
             />
           ))}
         </div>
+
+        {/* The caller's hidden trump card: visible, but separate from the hand and not playable */}
+        {playing && iAmCaller && !game.trumpRevealed && hiddenCard && (
+          <div className="w-full flex items-center justify-center gap-3 border-t border-zinc-800 pt-2.5">
+            <PlayingCard card={hiddenCard} size="sm" dim />
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm text-zinc-400">Hidden trump card. You cannot play it until you reveal.</span>
+              <button
+                disabled={busy}
+                onClick={() => action({ type: 'reveal' })}
+                className="bg-sky-700 hover:bg-sky-600 disabled:opacity-50 rounded-lg px-4 py-2 text-base transition"
+              >
+                Reveal trump
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Actions */}
       {bidding && (
-        <div className="w-full flex flex-col items-center gap-2">
+        <div className="w-full flex flex-col items-center gap-2.5">
           {bids.history.length > 0 && (
-            <p className="text-xs text-zinc-400 text-center">
+            <p className="text-sm text-zinc-400 text-center">
               {bids.history.map((h) => `${nameOf(h.seat)}: ${h.bid}`).join(' · ')}
             </p>
           )}
           {myTurn && (
             <>
-              <p className="text-xs text-zinc-400">
+              <p className="text-sm text-zinc-400 text-center">
                 {currentBid === null
                   ? 'Choose how many tricks your team will collect.'
                   : `Current bid: ${currentBid}. Raise it or pass.`}{' '}
@@ -317,7 +349,7 @@ export default function Table({ room, seats, me, isHost }) {
                     key={b}
                     disabled={busy || (currentBid !== null && b <= currentBid)}
                     onClick={() => action({ type: 'bid', amount: b })}
-                    className="w-16 h-12 text-lg rounded-xl bg-emerald-800 hover:bg-emerald-700 disabled:opacity-30 transition"
+                    className="w-20 h-14 text-2xl rounded-xl bg-emerald-800 hover:bg-emerald-700 disabled:opacity-30 transition"
                   >
                     {b}
                   </button>
@@ -326,7 +358,7 @@ export default function Table({ room, seats, me, isHost }) {
                   <button
                     disabled={busy}
                     onClick={() => action({ type: 'bid', amount: 'pass' })}
-                    className="px-4 h-12 rounded-xl bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 transition"
+                    className="px-5 h-14 text-lg rounded-xl bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 transition"
                   >
                     Pass
                   </button>
@@ -338,45 +370,60 @@ export default function Table({ room, seats, me, isHost }) {
       )}
 
       {choosing && iAmCaller && (
-        <div className="flex flex-col items-center gap-2">
-          <p className="text-xs text-zinc-400 text-center">
+        <div className="flex flex-col items-center gap-2.5">
+          <p className="text-sm text-zinc-400 text-center">
             Tap one of your cards. It is set aside face down and its suit becomes trump. You cannot play it
-            until trump is revealed.
+            until you reveal trump.
           </p>
           <button
             disabled={busy || !selected}
             onClick={() => action({ type: 'trump', card: selected })}
-            className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 rounded-lg px-6 py-2 transition"
+            className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 rounded-xl px-6 py-3 text-lg transition"
           >
             {selected ? `Hide ${cardText(selected)} as trump` : 'Select a card'}
           </button>
         </div>
       )}
 
-      {playing && iAmCaller && !game.trumpRevealed && hiddenCard && (
-        <div className="flex items-center gap-3 text-xs bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
-          <span className="text-zinc-400">
-            Hidden trump card: <span className="font-semibold text-zinc-100">{cardText(hiddenCard)}</span>
-          </span>
+      {canRevealAsVoid && (
+        <div className="w-full flex flex-col items-center gap-2 bg-zinc-900 border border-sky-700/50 rounded-xl px-3 py-3 text-center">
+          <p className="text-sm text-zinc-300">
+            You have no {SUIT_NAME[ledSuit]}. Play any card to discard it, or reveal trump (then you must
+            play a trump card if you have one).
+          </p>
           <button
             disabled={busy}
             onClick={() => action({ type: 'reveal' })}
-            className="bg-sky-700 hover:bg-sky-600 disabled:opacity-50 rounded px-3 py-1.5 transition"
+            className="bg-sky-700 hover:bg-sky-600 disabled:opacity-50 rounded-lg px-5 py-2.5 text-base transition"
           >
             Reveal trump
           </button>
         </div>
       )}
 
-      {finished && <FinishedPanel game={game} nameOf={nameOf} isHost={isHost} busy={busy} onDeal={() => act('/api/dohatti/start', {})} />}
+      {playing && myTurn && game.revealedBy === mySeat && game.revealedAtTrick === game.trickCount + 1 && legal.length > 0 && legal.every((c) => suitOf(c) === game.trump) && iAmVoid && (
+        <p className="text-sm text-sky-300 text-center">You revealed trump, so you must play a trump card.</p>
+      )}
 
-      {/* Table: opponents and the cards in play */}
+      {finished && (
+        <FinishedPanel
+          game={game}
+          nameOf={nameOf}
+          myTeam={myTeam}
+          myTally={myTally}
+          teamLabel={teamLabel}
+          isHost={isHost}
+          busy={busy}
+          onDeal={() => act('/api/dohatti/start', {})}
+        />
+      )}
+
+      {/* Table: the cards in play. I sit at the top, my partner at the bottom. */}
       {!bidding && !choosing && (
-        <div className="w-full flex flex-col items-center gap-1.5">
-          <SeatChip seat={seatAt(2)} game={game} seats={seats} nameOf={nameOf} />
+        <div className="w-full flex flex-col items-center gap-2">
           <div className="w-full flex items-stretch gap-1.5">
-            <SeatChip seat={seatAt(1)} game={game} seats={seats} nameOf={nameOf} />
-            <div className="relative flex-1 min-h-40">
+            <SeatChip seat={seatAt(3)} game={game} seats={seats} nameOf={nameOf} myTeam={myTeam} mySeat={mySeat} />
+            <div className="relative flex-1 min-h-48">
               <div
                 className={`absolute inset-0 grid grid-cols-3 grid-rows-3 place-items-center ${
                   showingLast ? 'opacity-50' : ''
@@ -389,18 +436,19 @@ export default function Table({ room, seats, me, isHost }) {
                 ))}
               </div>
             </div>
-            <SeatChip seat={seatAt(3)} game={game} seats={seats} nameOf={nameOf} />
+            <SeatChip seat={seatAt(1)} game={game} seats={seats} nameOf={nameOf} myTeam={myTeam} mySeat={mySeat} />
           </div>
+          <SeatChip seat={partnerSeat} game={game} seats={seats} nameOf={nameOf} myTeam={myTeam} mySeat={mySeat} wide />
           {showingLast && (
-            <p className="text-[10px] text-zinc-500">Last trick won by {nameOf(game.lastTrick.winner)}</p>
+            <p className="text-sm text-zinc-500">Last trick won by {nameOf(game.lastTrick.winner)}</p>
           )}
         </div>
       )}
 
       {(bidding || choosing) && (
-        <div className="w-full flex justify-center gap-1.5 flex-wrap">
-          {[1, 2, 3].map((pos) => (
-            <SeatChip key={pos} seat={seatAt(pos)} game={game} seats={seats} nameOf={nameOf} wide />
+        <div className="w-full flex justify-center gap-2 flex-wrap">
+          {[3, 2, 1].map((pos) => (
+            <SeatChip key={pos} seat={seatAt(pos)} game={game} seats={seats} nameOf={nameOf} myTeam={myTeam} mySeat={mySeat} wide />
           ))}
         </div>
       )}
@@ -408,21 +456,23 @@ export default function Table({ room, seats, me, isHost }) {
   )
 }
 
-function SeatChip({ seat, game, seats, nameOf, wide = false }) {
+function SeatChip({ seat, game, seats, nameOf, myTeam, mySeat, wide = false }) {
   const row = seats.find((s) => s.seat === seat)
-  const team = seat % 2
+  const mine = seat % 2 === myTeam
+  const tag = seat === mySeat ? 'You' : mine ? 'Partner' : 'Opponent'
   const active = game.phase !== 'finished' && game.turn === seat
   return (
     <div
-      className={`${wide ? 'w-28' : 'w-20'} ${
-        team === 0 ? 'border-sky-500/50' : 'border-amber-500/50'
-      } ${active ? 'ring-2 ring-emerald-400 bg-emerald-950/40' : 'bg-zinc-900'} border rounded-lg px-1.5 py-1.5 flex flex-col items-center justify-center text-center`}
+      className={`${wide ? 'w-32' : 'w-24'} ${
+        mine ? 'border-sky-500/60' : 'border-amber-500/60'
+      } ${active ? 'ring-2 ring-emerald-400 bg-emerald-950/40' : 'bg-zinc-900'} border-2 rounded-xl px-1.5 py-2 flex flex-col items-center justify-center text-center`}
     >
-      <span className="text-[11px] leading-tight w-full truncate">
+      <span className="text-base leading-tight w-full truncate">
         {row?.is_ai ? '🤖 ' : ''}
         {nameOf(seat)}
       </span>
-      <span className="text-[10px] text-zinc-500 leading-tight">
+      <span className={`text-xs font-semibold leading-tight ${mine ? 'text-sky-300' : 'text-amber-300'}`}>{tag}</span>
+      <span className="text-xs text-zinc-500 leading-tight">
         {game.handSizes[seat]} cards
         {game.dealer === seat ? ' · 🃏' : ''}
         {game.caller === seat ? ' · 🎯' : ''}
@@ -431,43 +481,43 @@ function SeatChip({ seat, game, seats, nameOf, wide = false }) {
   )
 }
 
-function FinishedPanel({ game, nameOf, isHost, busy, onDeal }) {
+function FinishedPanel({ game, nameOf, myTeam, myTally, teamLabel, isHost, busy, onDeal }) {
   const r = game.result
-  const callTeam = teamName(r.callingTeam)
+  const callLabel = teamLabel(r.callingTeam)
+  const myDelta = myTally(r.delta)
+  const myTallyAfter = myTally(r.tally)
   return (
-    <div className="w-full flex flex-col items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-center">
-      <p className="text-sm">
+    <div className="w-full flex flex-col items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3.5 text-center">
+      <p className="text-base">
         {r.made ? (
           <>
-            Team {callTeam} bid {r.bid} and collected {r.callingPoints}:{' '}
-            <span className="text-emerald-300 font-semibold">+{r.callingPoints}</span>
+            {callLabel} bid {r.bid} and collected {r.callingPoints}.
           </>
         ) : (
           <>
-            Team {callTeam} bid {r.bid} but only had {r.callingPoints}, the other team {r.defenderPoints}:{' '}
-            <span className="text-red-400 font-semibold">−{2 * r.bid}</span>
+            {callLabel} bid {r.bid} but only collected {r.callingPoints} (the other side {r.defenderPoints}).
           </>
         )}
       </p>
-      <p className="text-xs text-zinc-400">
-        Tally: A {r.tally[0]} · B {r.tally[1]}
+      <p className={`text-xl font-semibold ${myDelta < 0 ? 'text-red-400' : 'text-emerald-300'}`}>
+        Your team {signed(myDelta)} → {signed(myTallyAfter)}
       </p>
       {r.courtWonBy !== null && (
-        <p className="text-sm text-amber-300 font-semibold">
-          🏆 Team {teamName(r.courtWonBy)} wins a COURT! Scores reset to 0.
+        <p className="text-base text-amber-300 font-semibold">
+          🏆 {r.courtWonBy === myTeam ? 'Your team wins' : 'The opponents win'} a COURT! Tally resets to 0.
         </p>
       )}
-      <p className="text-xs text-zinc-500">Next dealer: {nameOf(game.nextDealer)}</p>
+      <p className="text-sm text-zinc-500">Next dealer: {nameOf(game.nextDealer)}</p>
       {isHost ? (
         <button
           onClick={onDeal}
           disabled={busy}
-          className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 rounded-lg px-6 py-2 transition"
+          className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 rounded-xl px-8 py-3 text-lg transition"
         >
           Deal again
         </button>
       ) : (
-        <p className="text-xs text-zinc-500">Waiting for the host to deal again…</p>
+        <p className="text-sm text-zinc-500">Waiting for the host to deal again…</p>
       )}
     </div>
   )

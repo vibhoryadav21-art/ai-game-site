@@ -1,5 +1,5 @@
 import { adminClient, findSeat, loadEngine, saveEngine, runAI } from '@/lib/dohatti/server'
-import { placeBid, chooseTrumpCard, callerReveal, playCard } from '@/lib/dohatti/engine'
+import { placeBid, chooseTrumpCard, revealTrump, playCard } from '@/lib/dohatti/engine'
 
 export const maxDuration = 30
 
@@ -8,7 +8,7 @@ const json = (data, status = 200) => Response.json(data, { status })
 // type 'bid' -> { amount: 10 | 11 | 13 | 'pass' }
 // type 'trump' -> { card }     (the caller hides one of their first 5 cards)
 // type 'play' -> { card }
-// type 'reveal' -> caller reveals the trump
+// type 'reveal' -> reveal the trump (caller any time; others on their turn when out of the led suit)
 // type 'kick' -> nudges stuck bots
 export async function POST(request) {
   try {
@@ -43,7 +43,7 @@ export async function POST(request) {
       result = playCard(eng.state, eng.hands, eng.trump, seat, card)
       if (!result.error) hands = result.hands
     } else if (type === 'reveal') {
-      result = callerReveal(eng.state, eng.hands, eng.trump, seat)
+      result = revealTrump(eng.state, eng.hands, eng.trump, seat)
       if (!result.error) hands = result.hands
     } else {
       return json({ error: 'Unknown action.' }, 400)

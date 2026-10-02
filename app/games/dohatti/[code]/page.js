@@ -16,12 +16,13 @@ import {
 } from '@/lib/dohattiRooms'
 import Table from '@/components/dohatti/Table'
 
-// seat 0 = bottom, 1 = left, 2 = top, 3 = right
+// Screen position relative to me: I sit at the TOP, my partner at the BOTTOM,
+// the next seat on my right, the last seat on my left (same as the game table).
 const SEAT_POSITION = {
-  0: 'col-start-2 row-start-3',
-  1: 'col-start-1 row-start-2',
-  2: 'col-start-2 row-start-1',
-  3: 'col-start-3 row-start-2',
+  0: 'col-start-2 row-start-1',
+  1: 'col-start-3 row-start-2',
+  2: 'col-start-2 row-start-3',
+  3: 'col-start-1 row-start-2',
 }
 
 export default function DoHattiRoomPage() {
@@ -174,11 +175,14 @@ export default function DoHattiRoomPage() {
   }
 
   const mySeat = seats.find((s) => s.player_id === me)
+  const myIdx = mySeat?.seat ?? 0
   const isHost = room.host_id === me
   const allFilled = seats.length === 4 && seats.every((s) => s.player_id || s.is_ai)
+  const nameAt = (seat) => seats.find((s) => s.seat === seat)?.display_name || '—'
+  const partnerIdx = (myIdx + 2) % 4
 
   return (
-    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-4 px-3 py-4">
+    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-4 px-3 py-4 text-base">
       {room.status === 'playing' ? (
         <Table room={room} seats={seats} me={me} isHost={isHost} />
       ) : (
@@ -189,64 +193,79 @@ export default function DoHattiRoomPage() {
               <button
                 onClick={start}
                 disabled={!allFilled}
-                className="w-full bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 rounded-xl py-3 text-lg transition"
+                className="w-full bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 rounded-xl py-3.5 text-xl transition"
               >
                 Start game
               </button>
               <button
                 onClick={fillAll}
                 disabled={allFilled}
-                className="text-sm bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 rounded-lg px-4 py-2 transition"
+                className="text-base bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 rounded-lg px-4 py-2.5 transition"
               >
                 Fill empty seats with AI
               </button>
               {!allFilled && (
-                <p className="text-xs text-zinc-500">All 4 seats need a player or an AI to start.</p>
+                <p className="text-sm text-zinc-500">All 4 seats need a player or an AI to start.</p>
               )}
             </div>
           ) : (
-            <p className="text-sm text-zinc-400">Waiting for the host to start the game…</p>
+            <p className="text-base text-zinc-400">Waiting for the host to start the game…</p>
           )}
 
-          <div className="grid grid-cols-3 grid-rows-3 gap-2 w-full max-w-sm">
-            {seats.map((s) => (
-              <SeatCard
-                key={s.seat}
-                seat={s}
-                isMe={s.player_id === me}
-                isSeatHost={!!s.player_id && s.player_id === room.host_id}
-                iAmSeated={!!mySeat}
-                iAmHost={isHost}
-                onSit={() => sit(s.seat)}
-                onAddAI={() => toggleAI(s.seat, true)}
-                onRemoveAI={() => toggleAI(s.seat, false)}
-              />
-            ))}
-            <div className="col-start-2 row-start-2 flex flex-col items-center justify-center text-center text-[10px] text-zinc-500 gap-0.5">
-              <span className="text-sky-400">Team A: bottom + top</span>
-              <span className="text-amber-400">Team B: left + right</span>
-            </div>
+          {/* Who is on which team */}
+          <div className="w-full max-w-sm flex flex-col gap-1 text-base bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">
+            <span className="text-sky-300">
+              Your team: {nameAt(myIdx)} + {nameAt(partnerIdx)}
+            </span>
+            <span className="text-amber-300">
+              Opponents: {nameAt((myIdx + 1) % 4)} + {nameAt((myIdx + 3) % 4)}
+            </span>
           </div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          <div className="grid grid-cols-3 grid-rows-3 gap-2 w-full max-w-sm">
+            {seats.map((s) => {
+              const pos = (s.seat - myIdx + 4) % 4
+              return (
+                <SeatCard
+                  key={s.seat}
+                  seat={s}
+                  positionClass={SEAT_POSITION[pos]}
+                  tag={pos === 0 ? 'You' : pos === 2 ? 'Partner' : 'Opponent'}
+                  mine={pos === 0 || pos === 2}
+                  isMe={s.player_id === me}
+                  isSeatHost={!!s.player_id && s.player_id === room.host_id}
+                  iAmSeated={!!mySeat}
+                  iAmHost={isHost}
+                  onSit={() => sit(s.seat)}
+                  onAddAI={() => toggleAI(s.seat, true)}
+                  onRemoveAI={() => toggleAI(s.seat, false)}
+                />
+              )
+            })}
+          </div>
+          <p className="text-sm text-zinc-500 text-center max-w-sm">
+            Tap "Sit here" on an empty seat to move. Partners sit opposite each other.
+          </p>
+
+          {error && <p className="text-base text-red-400">{error}</p>}
         </>
       )}
 
-      {room.status === 'playing' && error && <p className="text-sm text-red-400">{error}</p>}
+      {room.status === 'playing' && error && <p className="text-base text-red-400">{error}</p>}
 
       {/* Room code and leave button live at the bottom */}
       <div className="w-full max-w-sm flex flex-col items-center gap-2 border-t border-zinc-800 pt-4 mt-2">
         <div className="flex items-center gap-3">
-          <span className="text-xs text-zinc-500">Room code</span>
-          <span className="font-mono text-xl tracking-[0.3em] text-emerald-200">{room.code}</span>
+          <span className="text-sm text-zinc-500">Room code</span>
+          <span className="font-mono text-2xl tracking-[0.3em] text-emerald-200">{room.code}</span>
           <button
             onClick={copyCode}
-            className="text-xs bg-zinc-800 hover:bg-zinc-700 rounded px-2 py-1 transition"
+            className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-3 py-1.5 transition"
           >
             {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
-        <button onClick={leave} className="text-sm text-zinc-500 hover:text-zinc-300">
+        <button onClick={leave} className="text-base text-zinc-500 hover:text-zinc-300 py-1">
           Leave room
         </button>
       </div>
@@ -254,35 +273,46 @@ export default function DoHattiRoomPage() {
   )
 }
 
-function SeatCard({ seat, isMe, isSeatHost, iAmSeated, iAmHost, onSit, onAddAI, onRemoveAI }) {
-  const team = seat.seat % 2 === 0 ? 'A' : 'B'
-  const teamColor =
-    team === 'A' ? 'border-sky-500/50 bg-sky-950/30' : 'border-amber-500/50 bg-amber-950/30'
+function SeatCard({
+  seat,
+  positionClass,
+  tag,
+  mine,
+  isMe,
+  isSeatHost,
+  iAmSeated,
+  iAmHost,
+  onSit,
+  onAddAI,
+  onRemoveAI,
+}) {
+  const teamColor = mine ? 'border-sky-500/60 bg-sky-950/30' : 'border-amber-500/60 bg-amber-950/30'
+  const tagColor = mine ? 'text-sky-300' : 'text-amber-300'
   const isEmpty = !seat.player_id && !seat.is_ai
 
   return (
     <div
-      className={`${SEAT_POSITION[seat.seat]} ${teamColor} border rounded-xl p-2 flex flex-col items-center justify-center gap-1.5 min-h-20 text-center`}
+      className={`${positionClass} ${teamColor} border-2 rounded-xl p-2 flex flex-col items-center justify-center gap-1.5 min-h-24 text-center`}
     >
-      <span className="text-[10px] uppercase tracking-wide text-zinc-500">Team {team}</span>
+      <span className={`text-xs font-semibold uppercase tracking-wide ${tagColor}`}>{tag}</span>
 
-      {seat.is_ai && <span className="text-sm">🤖 {seat.display_name}</span>}
+      {seat.is_ai && <span className="text-base">🤖 {seat.display_name}</span>}
 
       {seat.player_id && (
-        <span className="text-sm">
+        <span className="text-base leading-tight">
           {isSeatHost && '👑 '}
           {seat.display_name}
           {isMe && <span className="text-emerald-300"> (you)</span>}
         </span>
       )}
 
-      {isEmpty && <span className="text-sm text-zinc-500">Empty</span>}
+      {isEmpty && <span className="text-base text-zinc-500">Empty</span>}
 
       <div className="flex gap-1 flex-wrap justify-center">
         {isEmpty && iAmSeated && (
           <button
             onClick={onSit}
-            className="text-xs bg-zinc-800 hover:bg-zinc-700 rounded px-2 py-1 transition"
+            className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-2.5 py-1.5 transition"
           >
             Sit here
           </button>
@@ -290,7 +320,7 @@ function SeatCard({ seat, isMe, isSeatHost, iAmSeated, iAmHost, onSit, onAddAI, 
         {isEmpty && iAmHost && (
           <button
             onClick={onAddAI}
-            className="text-xs bg-zinc-800 hover:bg-zinc-700 rounded px-2 py-1 transition"
+            className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-2.5 py-1.5 transition"
           >
             Add AI
           </button>
@@ -298,7 +328,7 @@ function SeatCard({ seat, isMe, isSeatHost, iAmSeated, iAmHost, onSit, onAddAI, 
         {seat.is_ai && iAmHost && (
           <button
             onClick={onRemoveAI}
-            className="text-xs bg-zinc-800 hover:bg-zinc-700 rounded px-2 py-1 transition"
+            className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-2.5 py-1.5 transition"
           >
             Remove AI
           </button>
