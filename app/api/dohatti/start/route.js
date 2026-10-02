@@ -32,7 +32,9 @@ export async function POST(request) {
 
     const prev = await loadEngine(db, roomId)
     if (prev && prev.state.phase !== 'finished') {
-      return json({ error: 'A game is already in progress.' }, 400)
+      // A game is already running (for example the button was pressed twice): not an error.
+      await runAI(db, roomId)
+      return json({ ok: true, alreadyRunning: true })
     }
 
     const ok = await dealNewGame(db, roomId, prev)

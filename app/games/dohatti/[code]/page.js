@@ -146,6 +146,11 @@ export default function DoHattiRoomPage() {
     run(() => postJson('/api/dohatti/start', { roomId: room.id, secret: getPlayerSecret() }))
 
   async function leave() {
+    const message =
+      room.status === 'playing'
+        ? 'Leave the game? A bot will take your seat.'
+        : 'Leave this room?'
+    if (!window.confirm(message)) return
     try {
       await leaveRoom(room, me)
     } finally {
@@ -182,7 +187,21 @@ export default function DoHattiRoomPage() {
   const partnerIdx = (myIdx + 2) % 4
 
   return (
-    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-4 px-3 py-4 text-base">
+    <div className="relative flex-1 bg-black text-zinc-100 flex flex-col items-center gap-4 px-3 py-4 text-base">
+      {/* Leave: red icon, top right */}
+      <button
+        onClick={leave}
+        aria-label="Leave room"
+        title="Leave room"
+        className="absolute top-3 right-3 z-20 w-11 h-11 rounded-full border-2 border-red-700 bg-black text-red-500 hover:bg-red-950 flex items-center justify-center transition"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+      </button>
+
       {room.status === 'playing' ? (
         <Table room={room} seats={seats} me={me} isHost={isHost} />
       ) : (
@@ -253,22 +272,21 @@ export default function DoHattiRoomPage() {
 
       {room.status === 'playing' && error && <p className="text-base text-red-400">{error}</p>}
 
-      {/* Room code and leave button live at the bottom */}
-      <div className="w-full max-w-sm flex flex-col items-center gap-2 border-t border-zinc-800 pt-4 mt-2">
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-zinc-500">Room code</span>
-          <span className="font-mono text-2xl tracking-[0.3em] text-emerald-200">{room.code}</span>
-          <button
-            onClick={copyCode}
-            className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-3 py-1.5 transition"
-          >
-            {copied ? 'Copied' : 'Copy'}
-          </button>
+      {/* Room code: only needed while people are still joining */}
+      {room.status !== 'playing' && (
+        <div className="w-full max-w-sm flex flex-col items-center gap-2 border-t border-zinc-800 pt-4 mt-2">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-zinc-500">Room code</span>
+            <span className="font-mono text-2xl tracking-[0.3em] text-emerald-200">{room.code}</span>
+            <button
+              onClick={copyCode}
+              className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-3 py-1.5 transition"
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
         </div>
-        <button onClick={leave} className="text-base text-zinc-500 hover:text-zinc-300 py-1">
-          Leave room
-        </button>
-      </div>
+      )}
     </div>
   )
 }
