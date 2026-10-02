@@ -178,25 +178,37 @@ export default function DoHattiRoomPage() {
   const allFilled = seats.length === 4 && seats.every((s) => s.player_id || s.is_ai)
 
   return (
-    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-6 px-4 py-10">
-      <h1 className="font-serif text-3xl text-sky-300">Do Hatti</h1>
-
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-zinc-400">Room code</span>
-        <span className="font-mono text-2xl tracking-[0.3em] text-emerald-200">{room.code}</span>
-        <button
-          onClick={copyCode}
-          className="text-xs bg-zinc-800 hover:bg-zinc-700 rounded px-2 py-1 transition"
-        >
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-
+    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-4 px-3 py-4">
       {room.status === 'playing' ? (
         <Table room={room} seats={seats} me={me} isHost={isHost} />
       ) : (
         <>
-          <div className="grid grid-cols-3 grid-rows-3 gap-3 w-full max-w-xl">
+          {/* Start controls first, so they are always visible on a phone */}
+          {isHost ? (
+            <div className="w-full max-w-sm flex flex-col items-center gap-2">
+              <button
+                onClick={start}
+                disabled={!allFilled}
+                className="w-full bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 rounded-xl py-3 text-lg transition"
+              >
+                Start game
+              </button>
+              <button
+                onClick={fillAll}
+                disabled={allFilled}
+                className="text-sm bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 rounded-lg px-4 py-2 transition"
+              >
+                Fill empty seats with AI
+              </button>
+              {!allFilled && (
+                <p className="text-xs text-zinc-500">All 4 seats need a player or an AI to start.</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-400">Waiting for the host to start the game…</p>
+          )}
+
+          <div className="grid grid-cols-3 grid-rows-3 gap-2 w-full max-w-sm">
             {seats.map((s) => (
               <SeatCard
                 key={s.seat}
@@ -210,46 +222,34 @@ export default function DoHattiRoomPage() {
                 onRemoveAI={() => toggleAI(s.seat, false)}
               />
             ))}
-            <div className="col-start-2 row-start-2 flex flex-col items-center justify-center text-center text-[11px] text-zinc-500 gap-1">
+            <div className="col-start-2 row-start-2 flex flex-col items-center justify-center text-center text-[10px] text-zinc-500 gap-0.5">
               <span className="text-sky-400">Team A: bottom + top</span>
               <span className="text-amber-400">Team B: left + right</span>
-              <span>Partners sit opposite each other</span>
             </div>
           </div>
 
           {error && <p className="text-sm text-red-400">{error}</p>}
-
-          {isHost ? (
-            <div className="flex flex-col items-center gap-3">
-              <button
-                onClick={fillAll}
-                disabled={allFilled}
-                className="text-sm bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 rounded-lg px-4 py-2 transition"
-              >
-                Fill empty seats with AI
-              </button>
-              <button
-                onClick={start}
-                disabled={!allFilled}
-                className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 rounded-lg px-8 py-2 transition"
-              >
-                Start game
-              </button>
-              {!allFilled && (
-                <p className="text-xs text-zinc-500">All 4 seats need a player or an AI to start.</p>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-zinc-400">Waiting for the host to start the game…</p>
-          )}
         </>
       )}
 
       {room.status === 'playing' && error && <p className="text-sm text-red-400">{error}</p>}
 
-      <button onClick={leave} className="text-sm text-zinc-500 hover:text-zinc-300">
-        Leave room
-      </button>
+      {/* Room code and leave button live at the bottom */}
+      <div className="w-full max-w-sm flex flex-col items-center gap-2 border-t border-zinc-800 pt-4 mt-2">
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-zinc-500">Room code</span>
+          <span className="font-mono text-xl tracking-[0.3em] text-emerald-200">{room.code}</span>
+          <button
+            onClick={copyCode}
+            className="text-xs bg-zinc-800 hover:bg-zinc-700 rounded px-2 py-1 transition"
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+        <button onClick={leave} className="text-sm text-zinc-500 hover:text-zinc-300">
+          Leave room
+        </button>
+      </div>
     </div>
   )
 }
@@ -262,7 +262,7 @@ function SeatCard({ seat, isMe, isSeatHost, iAmSeated, iAmHost, onSit, onAddAI, 
 
   return (
     <div
-      className={`${SEAT_POSITION[seat.seat]} ${teamColor} border rounded-xl p-3 flex flex-col items-center justify-center gap-2 min-h-24 text-center`}
+      className={`${SEAT_POSITION[seat.seat]} ${teamColor} border rounded-xl p-2 flex flex-col items-center justify-center gap-1.5 min-h-20 text-center`}
     >
       <span className="text-[10px] uppercase tracking-wide text-zinc-500">Team {team}</span>
 

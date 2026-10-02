@@ -2,39 +2,48 @@ import { SUIT_SYMBOL, suitOf, rankOf } from '@/lib/dohatti/engine'
 
 const RANK_LABEL = { 11: 'J', 12: 'Q', 13: 'K', 14: 'A' }
 
-export default function PlayingCard({ card, faceDown = false, onClick, disabled = false, dim = false }) {
+// size "md" = cards in your hand, "sm" = cards on the table
+export default function PlayingCard({
+  card,
+  faceDown = false,
+  onClick,
+  disabled = false,
+  selected = false,
+  size = 'md',
+}) {
+  const dims = size === 'sm' ? 'w-9 h-12' : 'w-11 h-16'
+  const rankText = size === 'sm' ? 'text-xs' : 'text-sm'
+  const suitText = size === 'sm' ? 'text-base' : 'text-xl'
+
   if (faceDown || !card) {
-    return <div className="w-10 h-14 rounded-md border border-sky-700 bg-sky-900" />
+    return <div className={`${dims} rounded-md border border-sky-700 bg-sky-900`} />
   }
 
   const suit = suitOf(card)
-  const rank = rankOf(card)
-  const label = RANK_LABEL[rank] || String(rank)
-  const red = suit === 'H' || suit === 'D'
-  const color = red ? 'text-red-600' : 'text-zinc-900'
+  const label = RANK_LABEL[rankOf(card)] || String(rankOf(card))
+  const color = suit === 'H' || suit === 'D' ? 'text-red-600' : 'text-zinc-900'
+  const base = `${dims} rounded-md border bg-white flex flex-col items-center justify-center leading-none font-semibold ${color}`
 
-  const base = `w-12 h-16 rounded-md border bg-white flex flex-col items-center justify-center leading-none font-semibold ${color}`
-  const state = dim ? 'opacity-60' : ''
+  const face = (
+    <>
+      <span className={rankText}>{label}</span>
+      <span className={suitText}>{SUIT_SYMBOL[suit]}</span>
+    </>
+  )
 
   if (onClick) {
     return (
       <button
         onClick={onClick}
         disabled={disabled}
-        className={`${base} ${state} border-zinc-300 transition ${
-          disabled ? 'opacity-40 cursor-not-allowed' : 'hover:-translate-y-2 hover:border-emerald-400 cursor-pointer'
-        }`}
+        className={`${base} transition ${
+          selected ? '-translate-y-2 border-emerald-400 ring-2 ring-emerald-400' : 'border-zinc-300'
+        } ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'}`}
       >
-        <span className="text-base">{label}</span>
-        <span className="text-xl">{SUIT_SYMBOL[suit]}</span>
+        {face}
       </button>
     )
   }
 
-  return (
-    <div className={`${base} ${state} border-zinc-300`}>
-      <span className="text-base">{label}</span>
-      <span className="text-xl">{SUIT_SYMBOL[suit]}</span>
-    </div>
-  )
+  return <div className={`${base} border-zinc-300`}>{face}</div>
 }

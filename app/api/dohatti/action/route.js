@@ -1,14 +1,18 @@
 import { adminClient, findSeat, loadEngine, saveEngine, runAI } from '@/lib/dohatti/server'
-import { chooseTrump, playCard } from '@/lib/dohatti/engine'
+import { placeBid, chooseTrumpCard, callerReveal, playCard } from '@/lib/dohatti/engine'
 
 export const maxDuration = 30
 
 const json = (data, status = 200) => Response.json(data, { status })
 
-// type 'trump' -> { suit }, type 'play' -> { card }, type 'kick' -> nudges stuck bots.
+// type 'bid' -> { amount: 10 | 11 | 13 | 'pass' }
+// type 'trump' -> { card }     (the caller hides one of their first 5 cards)
+// type 'play' -> { card }
+// type 'reveal' -> caller reveals the trump
+// type 'kick' -> nudges stuck bots
 export async function POST(request) {
   try {
-    const { roomId, secret, type, suit, card } = await request.json()
+    const { roomId, secret, type, amount, card } = await request.json()
     const db = adminClient()
 
     const seatRow = await findSeat(db, roomId, secret)
@@ -27,12 +31,20 @@ export async function POST(request) {
     let trump = eng.trump
     let hands = eng.hands
 
-    if (type === 'trump') {
-      result = chooseTrump(eng.state, seat, suit)
-      if (!result.error) trump = result.trump
+    if (type === 'bid') {
+      result = placeBid(eng.state, seat, amount === 'pass' ? 'pass' : Number(amount))
+    } else if (type === 'trump') {
+      result = chooseTrumpCard(eng.state, eng.hands, seat, card)
+      if (!result.error) {
+        hands = result.hands
+        trump = result.trumpCard
+      }
     } else if (type === 'play') {
-      result = playCard(eng.state, eng.hands[seat], eng.trump, seat, card)
-      if (!result.error) hands = eng.hands.map((h, i) => (i === seat ? result.hand : h))
+      result = playCard(eng.state, eng.hands, eng.trump, seat, card)
+      if (!result.error) hands = result.hands
+    } else if (type === 'reveal') {
+      result = callerReveal(eng.state, eng.hands, eng.trump, seat)
+      if (!result.error) hands = result.hands
     } else {
       return json({ error: 'Unknown action.' }, 400)
     }
