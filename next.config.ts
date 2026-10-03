@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
         // visitor's browser it still looks like theadda.vercel.app/admin —
         // only this server-to-server hop knows it's actually a separate app.
         source: "/admin/:path*",
-        destination: "https://ai-game-admin.vercel.app/admin/:path*",
+        destination: "https://ai-game-admin-imhyekbky-ai-futures1.vercel.app/admin/:path*",
       },
     ];
   },
