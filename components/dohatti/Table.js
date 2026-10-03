@@ -5,28 +5,35 @@ import { supabase } from '@/lib/supabaseClient'
 import { getPlayerSecret } from '@/lib/dohattiIdentity'
 import { postJson } from '@/lib/dohatti/api'
 import { useDohattiText } from '@/lib/dohattiText'
-import { BIDS, SUITS, SUIT_SYMBOL, legalPlays, suitOf, rankOf } from '@/lib/dohatti/engine'
+import { BIDS, SUITS, SUIT_SYMBOL, BOT_RISKS, legalPlays, suitOf, rankOf } from '@/lib/dohatti/engine'
 import PlayingCard from '@/components/dohatti/PlayingCard'
+import BotRisk, { RISK_ICON } from '@/components/dohatti/BotRisk'
 
-// LAYOUT RULE: everything at the top has a FIXED size, so the screen never jumps.
-// Everything that changes (status, bot notes, buttons, scores, timers) is at the bottom.
-// The seat layout is always left-to-right (dir="ltr"), even in Arabic, so that the
-// clockwise order of the seats stays the same.
+// SCREEN LAYOUT (top to bottom), made for a phone:
+//   1. symbols: bid, trump card, pile, points of this game
+//   2. status on the left, the buttons you need on the right (small)
+//   3. the table: partner on top, opponents left and right, YOU at the bottom
+//   4. your cards, in two rows
+//   5. hints, result, team names and score, bot style
+// Everything at the top has a fixed size, so the screen does not jump.
+// The seat layout is always left-to-right (dir="ltr"), even in Arabic.
 
 const RANK_LABEL = { 11: 'J', 12: 'Q', 13: 'K', 14: 'A' }
 const cardText = (card) => `${RANK_LABEL[rankOf(card)] || rankOf(card)}${SUIT_SYMBOL[suitOf(card)]}`
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0')
 
-// Position inside the trick area. I sit at the TOP, my partner at the BOTTOM.
-// Clockwise from me: me (top) -> next seat (right) -> partner (bottom) -> last seat (left).
+// Position inside the trick area. I sit at the BOTTOM, my partner at the TOP.
+// Clockwise from me: me (bottom) -> next seat (left) -> partner (top) -> last seat (right).
 const TRICK_POS = {
-  0: 'col-start-2 row-start-1',
-  1: 'col-start-3 row-start-2',
-  2: 'col-start-2 row-start-3',
-  3: 'col-start-1 row-start-2',
+  0: 'col-start-2 row-start-3',
+  1: 'col-start-1 row-start-2',
+  2: 'col-start-2 row-start-1',
+  3: 'col-start-3 row-start-2',
 }
 // A played card slides in from the side of the player who played it.
-const SLIDE_FROM = { 0: 'dh-from-top', 1: 'dh-from-right', 2: 'dh-from-bottom', 3: 'dh-from-left' }
+const SLIDE_FROM = { 0: 'dh-from-bottom', 1: 'dh-from-left', 2: 'dh-from-top', 3: 'dh-from-right' }
+
+const CARDS_PER_ROW = 7
 
 // Animations never change the size of anything (only transform / opacity / shadow).
 const ANIMATION_CSS = `
@@ -36,7 +43,7 @@ const ANIMATION_CSS = `
 @keyframes dh-from-bottom { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
 @keyframes dh-from-left { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
 @keyframes dh-pop { 0% { opacity: 0; transform: scale(.5); } 60% { opacity: 1; transform: scale(1.2); } 100% { transform: scale(1); } }
-@keyframes dh-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes dh-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes dh-flash { 0% { opacity: .85; } 100% { opacity: 0; } }
 @keyframes dh-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); } 50% { box-shadow: 0 0 16px 3px rgba(52, 211, 153, .55); } }
 .dh-deal { animation: dh-deal .35s ease-out both; }
@@ -51,32 +58,16 @@ const ANIMATION_CSS = `
 @media (prefers-reduced-motion: reduce) { [class*="dh-"] { animation: none !important; } }
 `
 
-function formatDuration(totalSeconds) {
-  const s = Math.max(0, totalSeconds)
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  const sec = s % 60
-  const mm = String(m).padStart(2, '0')
-  const ss = String(sec).padStart(2, '0')
-  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`
-}
+const BTN = 'h-9 min-w-9 px-2.5 rounded-lg text-sm font-semibold transition active:scale-95 disabled:opacity-40'
 
-// A clock value that updates every second.
-function useNow() {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-  return now
-}
-
-// A card written as text, red for hearts and diamonds.
-function CardInline({ card }) {
-  const red = suitOf(card) === 'H' || suitOf(card) === 'D'
+// A small card with TURUP written on it: marks the caller (the player who chose trump).
+function TurupBadge() {
   return (
-    <span dir="ltr" className={red ? 'text-red-400' : 'text-zinc-100'}>
-      {cardText(card)}
+    <span
+      title="TURUP"
+      className="inline-flex items-center justify-center w-9 h-[1.15rem] rounded-[3px] border border-zinc-400 bg-white text-[8px] font-extrabold tracking-tight text-red-600 leading-none align-middle"
+    >
+      TURUP
     </span>
   )
 }
@@ -89,8 +80,8 @@ export default function Table({ room, seats, me, isHost }) {
   const [selected, setSelected] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const now = useNow()
 
+  const risk = BOT_RISKS.includes(room.bot_risk) ? room.bot_risk : 'normal'
   const mySeat = seats.find((s) => s.player_id === me)?.seat ?? 0
   const myTeam = mySeat % 2
   const partnerSeat = (mySeat + 2) % 4
@@ -202,6 +193,7 @@ export default function Table({ room, seats, me, isHost }) {
   const ledSuit = game.trick.length > 0 ? suitOf(game.trick[0].card) : null
   const iAmVoid = !!ledSuit && !hand.some((c) => suitOf(c) === ledSuit)
   const canRevealAsVoid = playing && myTurn && !iAmCaller && !game.trumpRevealed && iAmVoid
+  const callerCanReveal = playing && iAmCaller && !game.trumpRevealed
   const mustPlayTrump =
     playing &&
     myTurn &&
@@ -215,9 +207,7 @@ export default function Table({ room, seats, me, isHost }) {
   const sortedHand = [...hand].sort(
     (a, b) => SUITS.indexOf(suitOf(a)) - SUITS.indexOf(suitOf(b)) || rankOf(b) - rankOf(a)
   )
-
-  const matchSeconds = Math.floor((now - game.matchStartedAt) / 1000)
-  const gameSeconds = Math.floor(((finished ? game.finishedAt : now) - game.gameStartedAt) / 1000)
+  const handRows = [sortedHand.slice(0, CARDS_PER_ROW), sortedHand.slice(CARDS_PER_ROW)]
 
   const tableCards = game.trick.length > 0 ? game.trick : game.lastTrick?.cards || []
   const showingLast = game.trick.length === 0 && !!game.lastTrick && playing
@@ -227,15 +217,14 @@ export default function Table({ room, seats, me, isHost }) {
   const isFirstBidder = bids.index === 0
   const bidBySeat = Object.fromEntries(bids.history.map((h) => [h.seat, h.bid]))
 
-  // ---- TOP: bid value and who made it ----
+  // ---- symbols at the top ----
   const bidValue = bidding ? bids.current : game.bid
   const bidSeat = bidding ? bids.bidder : game.caller
   const hasBid = bidValue !== null && bidValue !== undefined
   const bidMine = hasBid && bidSeat % 2 === myTeam
-  const bidText = hasBid ? t.bidLine(bidValue, nameOf(bidSeat), bidMine) : t.bidNone
   const bidColor = !hasBid ? 'text-zinc-400' : bidMine ? 'text-sky-300' : 'text-amber-300'
 
-  // ---- BOTTOM: status line ----
+  // ---- status text (short, left of the buttons) ----
   let status
   if (finished) {
     const label = teamLabel(game.result.callingTeam)
@@ -247,6 +236,13 @@ export default function Table({ room, seats, me, isHost }) {
   } else {
     status = myTurn ? t.statusYourTurn : t.statusWaiting(nameOf(game.turn))
   }
+
+  // ---- hint under the cards (only when there is something to explain) ----
+  let hint = ''
+  if (bidding && myTurn) hint = `${bids.current === null ? t.bidChoose : t.bidCurrent(bids.current)} ${t.bidCostDouble}`
+  else if (choosing && iAmCaller) hint = t.chooseHint
+  else if (canRevealAsVoid) hint = t.voidPrompt(t.suits[ledSuit])
+  else if (mustPlayTrump) hint = t.mustPlayTrump
 
   // ---- what happens when I tap a card ----
   function cardHandler(card) {
@@ -260,83 +256,121 @@ export default function Table({ room, seats, me, isHost }) {
   }
 
   const myTallyNow = myTally(game.scores)
-  const note = game.aiNote && !finished ? game.aiNote : null
-  const srcLabels = { llm: t.srcLlm, rules: t.srcRules, 'rules-fallback': t.srcFallback }
+  const chipProps = { game, seats, nameOf, myTeam, mySeat, t, lastWinner, risk }
 
   return (
-    <div className="w-full max-w-md flex flex-col items-center gap-3 text-base">
+    <div className="w-full max-w-md flex flex-col items-center gap-2 text-base">
       <style>{ANIMATION_CSS}</style>
 
-      {/* ===================== TOP (fixed size) ===================== */}
-
-      {/* Bid and trump. The right side is left free for the leave icon. */}
-      <div className="w-full h-16 pr-14 flex flex-col justify-center">
-        <div className={`truncate text-lg font-semibold ${bidColor}`}>{bidText}</div>
-        <div className="truncate text-lg font-semibold">
-          <span className="text-zinc-400">{t.trump}: </span>
-          {game.trumpRevealed ? (
-            <>
-              <span key={game.trumpCard || game.trump} className="inline-block dh-pop">
-                {game.trumpCard ? <CardInline card={game.trumpCard} /> : <span>{SUIT_SYMBOL[game.trump]}</span>}
-              </span>{' '}
-              <span className="text-sm font-normal text-zinc-500">
-                {t.revealedInfo(t.suits[game.trump], nameOf(game.revealedBy))}
-              </span>
-            </>
-          ) : (
-            <span className="text-zinc-300">{t.hidden}</span>
-          )}
-        </div>
-      </div>
-
-      {/* Me and my cards */}
+      {/* ============ 1. SYMBOLS: bid, trump card, pile, points of this game ============ */}
       <div
-        className={`w-full rounded-xl border-2 px-2 py-2 border-sky-500/60 ${
-          myTurn ? 'ring-2 ring-emerald-400 bg-emerald-950/30 dh-glow' : 'bg-zinc-900'
-        }`}
+        dir="ltr"
+        className="w-full h-11 flex items-center justify-around gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-2"
       >
-        <div className="h-14 flex items-center justify-between px-1 gap-2">
-          <div className="flex flex-col leading-tight min-w-0">
-            <span className="text-base truncate">
-              {nameOf(mySeat)} <span className="text-emerald-300">{t.you}</span>
+        <span title={t.symBid} className={`flex items-center gap-1 font-semibold ${bidColor}`}>
+          <span>📣</span>
+          <span className="text-lg">{hasBid ? bidValue : '–'}</span>
+        </span>
+        <span title={t.trump} className="flex items-center">
+          {game.trumpRevealed ? (
+            <span key={game.trumpCard || game.trump} className="inline-flex dh-pop">
+              {game.trumpCard ? (
+                <PlayingCard card={game.trumpCard} size="xs" />
+              ) : (
+                <span className="text-xl text-zinc-100">{SUIT_SYMBOL[game.trump]}</span>
+              )}
             </span>
-            <span className="text-sm text-zinc-500 truncate">
-              {t.cardsCount(game.handSizes[mySeat])}
-              {game.dealer === mySeat ? ` · ${t.dealerTag}` : ''}
-              {iAmCaller ? ` · ${t.callerTag}` : ''}
-            </span>
-          </div>
-          {/* The caller's hidden trump card: visible, separate from the hand, not playable */}
-          {playing && iAmCaller && !game.trumpRevealed && hiddenCard && (
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-zinc-400 text-center leading-tight">
-                {t.hiddenTrumpA}
-                <br />
-                {t.hiddenTrumpB}
-              </span>
-              <PlayingCard card={hiddenCard} size="sm" dim />
-            </div>
+          ) : (
+            <PlayingCard faceDown size="xs" />
           )}
-        </div>
-        <div dir="ltr" className="flex flex-wrap justify-center content-start gap-1.5 min-h-[9.5rem]">
-          {sortedHand.map((card, i) => (
-            <div key={`${game.gameNo}-${card}`} className="dh-deal" style={{ animationDelay: `${i * 30}ms` }}>
-              <PlayingCard
-                card={card}
-                selected={choosing && selected === card}
-                onClick={cardHandler(card)}
-                disabled={cardDisabled(card)}
-              />
-            </div>
-          ))}
+        </span>
+        <span title={t.symPile} className="flex items-center gap-1 font-semibold text-zinc-200">
+          <span>📚</span>
+          <span className="text-lg">{game.pot}</span>
+        </span>
+        <span title={t.symPoints} className="flex items-center gap-1 font-semibold">
+          <span>⭐</span>
+          <span className="text-lg">
+            <span className="text-sky-300">{myTally(game.points)}</span>
+            <span className="text-zinc-500">–</span>
+            <span className="text-amber-300">{game.points[1 - myTeam]}</span>
+          </span>
+        </span>
+      </div>
+
+      {/* ============ 2. STATUS (left) and MY BUTTONS (right, small) ============ */}
+      <div dir="ltr" className="w-full h-11 flex items-center justify-between gap-2 px-1">
+        <span
+          key={status}
+          dir="auto"
+          className={`dh-fade-up flex-1 min-w-0 truncate text-sm font-semibold ${
+            myTurn ? 'text-emerald-300' : 'text-zinc-400'
+          }`}
+        >
+          {status}
+        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {bidding &&
+            myTurn &&
+            BIDS.map((b) => (
+              <button
+                key={b}
+                disabled={busy || (bids.current !== null && b <= bids.current)}
+                onClick={() => action({ type: 'bid', amount: b })}
+                className={`${BTN} bg-emerald-800 hover:bg-emerald-700`}
+              >
+                {b}
+              </button>
+            ))}
+          {bidding && myTurn && !isFirstBidder && (
+            <button
+              disabled={busy}
+              onClick={() => action({ type: 'bid', amount: 'pass' })}
+              className={`${BTN} bg-zinc-700 hover:bg-zinc-600`}
+            >
+              {t.pass}
+            </button>
+          )}
+          {choosing && iAmCaller && (
+            <button
+              disabled={busy || !selected}
+              title={selected ? t.hideAsTrump(cardText(selected)) : t.selectCard}
+              aria-label={selected ? t.hideAsTrump(cardText(selected)) : t.selectCard}
+              onClick={() => action({ type: 'trump', card: selected })}
+              className={`${BTN} bg-emerald-700 hover:bg-emerald-600`}
+            >
+              ✔ {selected ? cardText(selected) : ''}
+            </button>
+          )}
+          {(callerCanReveal || canRevealAsVoid) && (
+            <button
+              disabled={busy}
+              title={t.revealTrump}
+              aria-label={t.revealTrump}
+              onClick={() => action({ type: 'reveal' })}
+              className={`${BTN} bg-sky-700 hover:bg-sky-600`}
+            >
+              👁 {t.revealShort}
+            </button>
+          )}
+          {finished && isHost && (
+            <button
+              disabled={busy}
+              onClick={() => act('/api/dohatti/start', {})}
+              className={`${BTN} bg-emerald-700 hover:bg-emerald-600`}
+            >
+              🔄 {t.dealAgain}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* The table. Same size in every phase. */}
-      <div dir="ltr" className="w-full flex flex-col items-center gap-2">
+      {/* ============ 3. THE TABLE: partner on top, opponents left / right, me at the bottom ============ */}
+      <div dir="ltr" className="w-full flex flex-col items-center gap-1.5">
+        <SeatChip seat={seatAt(2)} wide {...chipProps} />
         <div className="w-full flex items-center gap-1.5">
-          <SeatChip seat={seatAt(3)} {...{ game, seats, nameOf, myTeam, mySeat, t, lastWinner }} />
-          <div className="relative flex-1 h-48">
+          <SeatChip seat={seatAt(1)} {...chipProps} />
+          <div className="relative flex-1 h-36">
             {/* cards in play (faded when it is the previous trick) */}
             <div
               className={`absolute inset-0 grid grid-cols-3 grid-rows-3 place-items-center ${
@@ -360,7 +394,7 @@ export default function Table({ room, seats, me, isHost }) {
                   bidBySeat[seat] !== undefined ? (
                     <span
                       key={`${seat}-${bidBySeat[seat]}`}
-                      className={`${TRICK_POS[screenPos(seat)]} dh-pop px-2.5 py-1 rounded-lg bg-zinc-800 text-lg font-semibold ${
+                      className={`${TRICK_POS[screenPos(seat)]} dh-pop px-2 py-0.5 rounded-lg bg-zinc-800 text-base font-semibold ${
                         bidBySeat[seat] === 'pass' ? 'text-zinc-400' : 'text-emerald-300'
                       }`}
                     >
@@ -372,168 +406,85 @@ export default function Table({ room, seats, me, isHost }) {
             )}
             {/* small text in the empty middle */}
             <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 place-items-center pointer-events-none">
-              <div className="col-start-2 row-start-2 text-[11px] leading-tight text-zinc-500 text-center">
+              <div className="col-start-2 row-start-2 text-[10px] leading-tight text-zinc-500 text-center">
                 {showingLast ? t.lastTrickWon(nameOf(game.lastTrick.winner)) : ''}
                 {choosing ? t.choosingShort : ''}
               </div>
             </div>
           </div>
-          <SeatChip seat={seatAt(1)} {...{ game, seats, nameOf, myTeam, mySeat, t, lastWinner }} />
+          <SeatChip seat={seatAt(3)} {...chipProps} />
         </div>
-        <SeatChip seat={partnerSeat} wide {...{ game, seats, nameOf, myTeam, mySeat, t, lastWinner }} />
+        <SeatChip seat={mySeat} wide mine hiddenCard={playing && iAmCaller && !game.trumpRevealed ? hiddenCard : null} {...chipProps} />
       </div>
 
-      {/* ===================== BOTTOM (everything that moves) ===================== */}
-      <div className="w-full flex flex-col items-center gap-3 border-t border-zinc-800 pt-3">
-        {/* Status and what the last bot did */}
-        <p
-          key={status}
-          className={`dh-fade-up min-h-[3rem] flex items-center justify-center text-xl font-semibold text-center ${
-            myTurn ? 'text-emerald-300' : 'text-zinc-300'
-          }`}
-        >
-          {status}
-        </p>
-        <p className="min-h-[2.75rem] text-sm text-zinc-500 text-center">
-          {note && (
-            <>
-              🤖 {nameOf(note.seat)}{' '}
-              {note.kind === 'bid'
-                ? note.bid === 'pass'
-                  ? t.botPassed
-                  : t.botBid(note.bid)
-                : note.kind === 'trump'
-                  ? t.botHidTrump
-                  : note.revealed
-                    ? t.botRevealedPlayed(cardText(note.card))
-                    : t.botPlayed(cardText(note.card))}{' '}
-              · {srcLabels[note.source] || note.source}
-              {note.text ? ` · “${note.text}”` : ''}
-            </>
-          )}
-        </p>
-        {error && <p className="text-base text-red-400 text-center">{tr(error)}</p>}
-
-        {/* Bidding buttons */}
-        {bidding && myTurn && (
-          <div className="w-full flex flex-col items-center gap-2.5">
-            <p className="text-sm text-zinc-400 text-center">
-              {bids.current === null ? t.bidChoose : t.bidCurrent(bids.current)} {t.bidCostDouble}
-            </p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {BIDS.map((b) => (
-                <button
-                  key={b}
-                  disabled={busy || (bids.current !== null && b <= bids.current)}
-                  onClick={() => action({ type: 'bid', amount: b })}
-                  className="w-20 h-14 text-2xl rounded-xl bg-emerald-800 hover:bg-emerald-700 disabled:opacity-30 transition active:scale-95"
-                >
-                  {b}
-                </button>
-              ))}
-              {!isFirstBidder && (
-                <button
-                  disabled={busy}
-                  onClick={() => action({ type: 'bid', amount: 'pass' })}
-                  className="px-5 h-14 text-lg rounded-xl bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 transition active:scale-95"
-                >
-                  {t.pass}
-                </button>
-              )}
-            </div>
+      {/* ============ 4. MY CARDS, two rows ============ */}
+      <div dir="ltr" className="w-full flex flex-col items-center gap-1 min-h-[7.25rem]">
+        {handRows.map((row, rowIndex) => (
+          <div key={rowIndex} className="flex justify-center gap-1 min-h-14">
+            {row.map((card, i) => (
+              <div
+                key={`${game.gameNo}-${card}`}
+                className="dh-deal"
+                style={{ animationDelay: `${(rowIndex * CARDS_PER_ROW + i) * 30}ms` }}
+              >
+                <PlayingCard
+                  card={card}
+                  selected={choosing && selected === card}
+                  onClick={cardHandler(card)}
+                  disabled={cardDisabled(card)}
+                />
+              </div>
+            ))}
           </div>
-        )}
+        ))}
+      </div>
 
-        {/* Choose the hidden trump card */}
-        {choosing && iAmCaller && (
-          <div className="flex flex-col items-center gap-2.5">
-            <p className="text-sm text-zinc-400 text-center">{t.chooseHint}</p>
-            <button
-              disabled={busy || !selected}
-              onClick={() => action({ type: 'trump', card: selected })}
-              className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 rounded-xl px-6 py-3 text-lg transition active:scale-95"
-            >
-              {selected ? t.hideAsTrump(cardText(selected)) : t.selectCard}
-            </button>
-          </div>
-        )}
+      {/* ============ 5. below the game ============ */}
+      {hint && <p className="text-sm text-zinc-400 text-center">{hint}</p>}
+      {error && <p className="text-base text-red-400 text-center">{tr(error)}</p>}
 
-        {/* Caller: reveal */}
-        {playing && iAmCaller && !game.trumpRevealed && (
-          <button
-            disabled={busy}
-            onClick={() => action({ type: 'reveal' })}
-            className="w-full bg-sky-700 hover:bg-sky-600 disabled:opacity-50 rounded-xl px-5 py-3 text-lg transition active:scale-95"
+      {finished && (
+        <FinishedPanel {...{ game, nameOf, myTeam, myTally, teamLabel, t, isHost }} />
+      )}
+
+      {/* Team names and score, just below the game */}
+      <div className="w-full text-sm bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 flex flex-col gap-1">
+        <div className="flex justify-between items-baseline">
+          <span className="text-zinc-300">{t.yourTeamTally}</span>
+          <span
+            dir="ltr"
+            className={`text-xl font-semibold ${
+              myTallyNow < 0 ? 'text-red-400' : myTallyNow > 0 ? 'text-emerald-300' : 'text-zinc-200'
+            }`}
           >
-            {t.revealTrump}
-          </button>
-        )}
-
-        {/* Other player who has no card of the led suit: reveal or discard */}
-        {canRevealAsVoid && (
-          <div className="dh-fade-up w-full flex flex-col items-center gap-2 bg-zinc-900 border border-sky-700/50 rounded-xl px-3 py-3 text-center">
-            <p className="text-sm text-zinc-300">{t.voidPrompt(t.suits[ledSuit])}</p>
-            <button
-              disabled={busy}
-              onClick={() => action({ type: 'reveal' })}
-              className="bg-sky-700 hover:bg-sky-600 disabled:opacity-50 rounded-lg px-5 py-2.5 text-base transition active:scale-95"
-            >
-              {t.revealTrump}
-            </button>
-          </div>
-        )}
-
-        {mustPlayTrump && <p className="text-sm text-sky-300 text-center">{t.mustPlayTrump}</p>}
-
-        {finished && (
-          <FinishedPanel
-            {...{ game, nameOf, myTeam, myTally, teamLabel, t, busy }}
-            isHost={isHost}
-            onDeal={() => act('/api/dohatti/start', {})}
-          />
-        )}
-
-        {/* Scores, teams and timers */}
-        <div className="w-full text-sm bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-3 flex flex-col gap-1.5">
-          <div className="flex justify-between items-baseline">
-            <span className="text-zinc-300 text-base">{t.yourTeamTally}</span>
-            <span
-              dir="ltr"
-              className={`text-2xl font-semibold ${
-                myTallyNow < 0 ? 'text-red-400' : myTallyNow > 0 ? 'text-emerald-300' : 'text-zinc-200'
-              }`}
-            >
-              {signed(myTallyNow)}
-            </span>
-          </div>
-          <div className="flex justify-between gap-2 text-zinc-300">
-            <span>{t.courtsLine(myTally(game.courts), game.courts[1 - myTeam])}</span>
-            {game.bid && <span>{t.pointsLine(myTally(game.points), game.points[1 - myTeam], game.pot)}</span>}
-          </div>
-          <div className="text-sky-300">{t.yourTeamNames(nameOf(mySeat), nameOf(partnerSeat))}</div>
-          <div className="text-amber-300">{t.opponentsNames(nameOf(seatAt(1)), nameOf(seatAt(3)))}</div>
-          <div className="text-zinc-400">
-            {t.timeLine(formatDuration(matchSeconds), formatDuration(gameSeconds), game.gameNo)}
-          </div>
+            {signed(myTallyNow)}
+          </span>
         </div>
+        <div className="text-zinc-300">{t.courtsLine(myTally(game.courts), game.courts[1 - myTeam])}</div>
+        <div className="text-sky-300">{t.yourTeamNames(nameOf(mySeat), nameOf(partnerSeat))}</div>
+        <div className="text-amber-300">{t.opponentsNames(nameOf(seatAt(1)), nameOf(seatAt(3)))}</div>
       </div>
+
+      {/* Bot style */}
+      <BotRisk room={room} isHost={isHost} t={t} />
     </div>
   )
 }
 
-// Same height in every state, so nothing jumps.
-function SeatChip({ seat, game, seats, nameOf, myTeam, mySeat, t, lastWinner, wide = false }) {
+// Same size in every state, so nothing jumps.
+function SeatChip({ seat, game, seats, nameOf, myTeam, mySeat, t, lastWinner, risk, wide = false, mine = false, hiddenCard = null }) {
   const row = seats.find((s) => s.seat === seat)
-  const mine = seat % 2 === myTeam
-  const tag = seat === mySeat ? t.tagYou : mine ? t.tagPartner : t.tagOpponent
+  const sameTeam = seat % 2 === myTeam
+  const tag = seat === mySeat ? t.tagYou : sameTeam ? t.tagPartner : t.tagOpponent
   const active = game.phase !== 'finished' && game.turn === seat
+  const signal = row?.is_ai ? game.signals?.[seat] : null
   return (
     <div
-      className={`relative ${wide ? 'w-36' : 'w-24'} shrink-0 h-[4.75rem] ${
-        mine ? 'border-sky-500/60' : 'border-amber-500/60'
+      className={`relative ${wide ? 'w-40' : 'w-[5.25rem]'} shrink-0 h-12 ${
+        sameTeam ? 'border-sky-500/60' : 'border-amber-500/60'
       } ${
         active ? 'ring-2 ring-emerald-400 bg-emerald-950/40 dh-glow' : 'bg-zinc-900'
-      } border-2 rounded-xl px-1.5 flex flex-col items-center justify-center text-center`}
+      } border-2 rounded-xl px-1.5 flex items-center ${hiddenCard ? 'justify-between' : 'justify-center'} text-center`}
     >
       {/* flashes once when this player has just won the trick */}
       {lastWinner === seat && (
@@ -542,52 +493,59 @@ function SeatChip({ seat, game, seats, nameOf, myTeam, mySeat, t, lastWinner, wi
           className="dh-flash pointer-events-none absolute inset-0 rounded-xl bg-emerald-400/50"
         />
       )}
-      <span className="text-base leading-tight w-full truncate">
-        {row?.is_ai ? '🤖 ' : ''}
-        {nameOf(seat)}
-      </span>
-      <span className={`text-xs font-semibold leading-tight ${mine ? 'text-sky-300' : 'text-amber-300'}`}>
-        {tag}
-        {game.dealer === seat ? ' 🃏' : ''}
-        {game.caller === seat ? ' 🎯' : ''}
-      </span>
-      <span className="text-xs text-zinc-500 leading-tight">{t.cardsCount(game.handSizes[seat])}</span>
+
+      {/* signal of the bot's last move: green = fine or automatic, red = the AI model failed */}
+      {signal && (
+        <span
+          key={`${seat}-${signal}-${game.version}`}
+          title={signal === 'g' ? t.sigOk : t.sigError}
+          className={`dh-pop absolute top-1 right-1 w-2.5 h-2.5 rounded-full ${
+            signal === 'g' ? 'bg-emerald-400' : 'bg-red-500'
+          }`}
+        />
+      )}
+
+      <div className="flex flex-col items-center leading-tight min-w-0">
+        <span className="text-sm w-full truncate">
+          {row?.is_ai ? '🤖 ' : ''}
+          {nameOf(seat)}
+        </span>
+        <span className="flex items-center justify-center gap-1 text-[11px] font-semibold leading-tight">
+          <span className={sameTeam ? 'text-sky-300' : 'text-amber-300'}>{tag}</span>
+          {row?.is_ai && <span title={risk}>{RISK_ICON[risk]}</span>}
+          {game.dealer === seat && <span>🃏</span>}
+          {game.caller === seat && <TurupBadge />}
+        </span>
+      </div>
+
+      {/* the caller's hidden trump card: visible to the caller only, not playable */}
+      {hiddenCard && <PlayingCard card={hiddenCard} size="xs" dim />}
     </div>
   )
 }
 
-function FinishedPanel({ game, nameOf, myTeam, myTally, teamLabel, t, busy, isHost, onDeal }) {
+function FinishedPanel({ game, nameOf, myTeam, myTally, teamLabel, t, isHost }) {
   const r = game.result
   const callLabel = teamLabel(r.callingTeam)
   const myDelta = myTally(r.delta)
   const myTallyAfter = myTally(r.tally)
   return (
-    <div className="dh-fade-up w-full flex flex-col items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3.5 text-center">
-      <p className="text-base">
+    <div className="dh-fade-up w-full flex flex-col items-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-center">
+      <p className="text-sm">
         {r.made
           ? t.madeLine(callLabel, r.bid, r.callingPoints)
           : t.missedLine(callLabel, r.bid, r.callingPoints, r.defenderPoints)}
       </p>
-      <p className={`text-xl font-semibold ${myDelta < 0 ? 'text-red-400' : 'text-emerald-300'}`}>
+      <p className={`text-lg font-semibold ${myDelta < 0 ? 'text-red-400' : 'text-emerald-300'}`}>
         {t.deltaLine(signed(myDelta), signed(myTallyAfter))}
       </p>
       {r.courtWonBy !== null && (
-        <p className="dh-pop text-base text-amber-300 font-semibold">
+        <p className="dh-pop text-sm text-amber-300 font-semibold">
           {r.courtWonBy === myTeam ? t.courtYou : t.courtThem}
         </p>
       )}
-      <p className="text-sm text-zinc-500">{t.nextDealer(nameOf(game.nextDealer))}</p>
-      {isHost ? (
-        <button
-          onClick={onDeal}
-          disabled={busy}
-          className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 rounded-xl px-8 py-3 text-lg transition active:scale-95"
-        >
-          {t.dealAgain}
-        </button>
-      ) : (
-        <p className="text-sm text-zinc-500">{t.waitingDeal}</p>
-      )}
+      <p className="text-xs text-zinc-500">{t.nextDealer(nameOf(game.nextDealer))}</p>
+      {!isHost && <p className="text-xs text-zinc-500">{t.waitingDeal}</p>}
     </div>
   )
 }

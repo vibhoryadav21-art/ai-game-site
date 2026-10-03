@@ -16,14 +16,16 @@ import {
   leaveRoom,
 } from '@/lib/dohattiRooms'
 import Table from '@/components/dohatti/Table'
+import BotRisk, { RISK_ICON } from '@/components/dohatti/BotRisk'
+import { BOT_RISKS } from '@/lib/dohatti/engine'
 
-// Screen position relative to me: I sit at the TOP, my partner at the BOTTOM,
-// the next seat on my right, the last seat on my left (same as the game table).
+// Screen position relative to me: I sit at the BOTTOM, my partner at the TOP,
+// the next seat on my left, the last seat on my right (same as the game table).
 const SEAT_POSITION = {
-  0: 'col-start-2 row-start-1',
-  1: 'col-start-3 row-start-2',
-  2: 'col-start-2 row-start-3',
-  3: 'col-start-1 row-start-2',
+  0: 'col-start-2 row-start-3',
+  1: 'col-start-1 row-start-2',
+  2: 'col-start-2 row-start-1',
+  3: 'col-start-3 row-start-2',
 }
 
 export default function DoHattiRoomPage() {
@@ -190,30 +192,7 @@ export default function DoHattiRoomPage() {
   const partnerIdx = (myIdx + 2) % 4
 
   return (
-    <div className="relative flex-1 bg-black text-zinc-100 flex flex-col items-center gap-4 px-3 py-4 text-base">
-      {/* Leave: red icon, top right */}
-      <button
-        onClick={leave}
-        aria-label={t.leave}
-        title={t.leave}
-        className="absolute top-3 right-3 z-20 w-11 h-11 rounded-full border-2 border-red-700 bg-black text-red-500 hover:bg-red-950 flex items-center justify-center transition active:scale-95"
-      >
-        <svg
-          width="22"
-          height="22"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-          <polyline points="16 17 21 12 16 7" />
-          <line x1="21" y1="12" x2="9" y2="12" />
-        </svg>
-      </button>
-
+    <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center gap-3 px-3 py-3 text-base">
       <style>{`@keyframes dh-pop { 0% { opacity: 0; transform: scale(.5); } 60% { opacity: 1; transform: scale(1.2); } 100% { transform: scale(1); } } .dh-pop { animation: dh-pop .45s ease-out both; } @media (prefers-reduced-motion: reduce) { .dh-pop { animation: none !important; } }`}</style>
 
       {room.status === 'playing' ? (
@@ -222,7 +201,7 @@ export default function DoHattiRoomPage() {
         <>
           {/* Start controls first, so they are always visible on a phone */}
           {isHost ? (
-            <div className="w-full max-w-sm flex flex-col items-center gap-2 pr-12">
+            <div className="w-full max-w-sm flex flex-col items-center gap-2">
               <button
                 onClick={start}
                 disabled={!allFilled}
@@ -240,7 +219,7 @@ export default function DoHattiRoomPage() {
               {!allFilled && <p className="text-sm text-zinc-500 text-center">{t.needAllSeats}</p>}
             </div>
           ) : (
-            <p className="text-base text-zinc-400 pr-12">{t.waitingForHost}</p>
+            <p className="text-base text-zinc-400">{t.waitingForHost}</p>
           )}
 
           {/* Who is on which team */}
@@ -259,6 +238,7 @@ export default function DoHattiRoomPage() {
                   key={s.seat}
                   seat={s}
                   t={t}
+                  risk={BOT_RISKS.includes(room.bot_risk) ? room.bot_risk : 'normal'}
                   positionClass={SEAT_POSITION[pos]}
                   tag={pos === 0 ? t.tagYou : pos === 2 ? t.tagPartner : t.tagOpponent}
                   mine={pos === 0 || pos === 2}
@@ -274,6 +254,10 @@ export default function DoHattiRoomPage() {
             })}
           </div>
           <p className="text-sm text-zinc-500 text-center max-w-sm">{t.seatHint}</p>
+
+          <div className="w-full max-w-sm">
+            <BotRisk room={room} isHost={isHost} t={t} />
+          </div>
         </>
       )}
 
@@ -296,6 +280,31 @@ export default function DoHattiRoomPage() {
           </div>
         </div>
       )}
+
+      {/* Leave: red icon, bottom left */}
+      <div dir="ltr" className="w-full max-w-md flex justify-start pt-1">
+        <button
+          onClick={leave}
+          aria-label={t.leave}
+          title={t.leave}
+          className="w-11 h-11 rounded-full border-2 border-red-700 bg-black text-red-500 hover:bg-red-950 flex items-center justify-center transition active:scale-95"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
+      </div>
     </div>
   )
 }
@@ -303,6 +312,7 @@ export default function DoHattiRoomPage() {
 function SeatCard({
   seat,
   t,
+  risk,
   positionClass,
   tag,
   mine,
@@ -324,7 +334,11 @@ function SeatCard({
     >
       <span className={`text-xs font-semibold uppercase tracking-wide ${tagColor}`}>{tag}</span>
 
-      {seat.is_ai && <span className="text-base">🤖 {seat.display_name}</span>}
+      {seat.is_ai && (
+        <span className="text-base">
+          🤖 {seat.display_name} <span title={risk}>{RISK_ICON[risk]}</span>
+        </span>
+      )}
 
       {seat.player_id && (
         <span key={seat.display_name} className="dh-pop text-base leading-tight">
