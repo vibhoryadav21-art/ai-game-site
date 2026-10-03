@@ -14,8 +14,7 @@ const LEARNING_APPS = [
 ]
 
 const GAME_APPS = [
-  { href: '/games/higher-lower', img: '/Higher-Lower.jpg', alt: 'Higher or Lower' },
-  { href: '/games/dohatti', img: '/Dohatti.jpg', alt: 'Do-Hatti' },
+  { href: '/game', img: '/Higher-Lower.jpg', alt: 'Higher or Lower' },
   { href: '/learning/trivia', img: '/Trivia.png', alt: 'Trivia' },
 ]
 
