@@ -8,6 +8,7 @@ import { useDohattiText } from '@/lib/dohattiText'
 import { BIDS, SUITS, SUIT_SYMBOL, BOT_RISKS, legalPlays, suitOf, rankOf } from '@/lib/dohatti/engine'
 import PlayingCard from '@/components/dohatti/PlayingCard'
 import BotRisk, { RISK_ICON } from '@/components/dohatti/BotRisk'
+import { kickDelay, TURN_LIMIT_MS } from '@/lib/dohatti/presence'
 
 // SCREEN LAYOUT (top to bottom), made for a phone:
 //   1. symbols: bid, trump card, pile, points of this game
@@ -147,20 +148,21 @@ export default function Table({ room, seats, me, isHost }) {
     setSelected(null)
   }, [game?.gameNo])
 
-  // Safety net: if a bot should move but nothing happens for 5 seconds, the host nudges the server.
+  // Safety net. When it is somebody else's turn and nothing happens for a while, every player's browser
+  // asks the server to check. The server decides what to do: let a bot move (bot seats), or put a bot on
+  // autopilot for a human who is away (no heartbeat) or has not played for 2 minutes. The server ignores
+  // the request when nothing is due, and two requests at once are harmless.
+  const turnActor = game ? seats.find((s) => s.seat === game.turn) : null
+  const turnActorIsBot = !!turnActor?.is_ai
   useEffect(() => {
-    if (!isHost || !game || game.phase === 'finished') return
-    const actor = seats.find((s) => s.seat === game.turn)
-    if (!actor?.is_ai) return
-    const timer = setTimeout(() => {
-      postJson('/api/dohatti/action', {
-        roomId: room.id,
-        secret: getPlayerSecret(),
-        type: 'kick',
-      }).catch(() => {})
-    }, 5000)
-    return () => clearTimeout(timer)
-  }, [isHost, game, seats, room.id])
+    if (!game || game.phase === 'finished' || !turnActor || turnActor.seat === mySeat) return
+    const kick = () =>
+      postJson('/api/dohatti/action', { roomId: room.id, secret: getPlayerSecret(), type: 'kick' }).catch(() => {})
+    const timers = [setTimeout(kick, kickDelay(game, turnActorIsBot) + Math.random() * 2000)]
+    if (!turnActorIsBot) timers.push(setTimeout(kick, TURN_LIMIT_MS + 2000 + Math.random() * 2000))
+    return () => timers.forEach(clearTimeout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.version, game?.turn, game?.phase, turnActorIsBot, mySeat, room.id])
 
   async function act(url, body) {
     if (busy) return
@@ -243,6 +245,7 @@ export default function Table({ room, seats, me, isHost }) {
   else if (choosing && iAmCaller) hint = t.chooseHint
   else if (canRevealAsVoid) hint = t.voidPrompt(t.suits[ledSuit])
   else if (mustPlayTrump) hint = t.mustPlayTrump
+  else if (game.signals?.[mySeat] === 'z') hint = t.autopilotYou
 
   // ---- what happens when I tap a card ----
   function cardHandler(card) {
@@ -353,7 +356,7 @@ export default function Table({ room, seats, me, isHost }) {
               👁 {t.revealShort}
             </button>
           )}
-          {finished && isHost && (
+          {finished && (
             <button
               disabled={busy}
               onClick={() => act('/api/dohatti/start', {})}
@@ -444,7 +447,7 @@ export default function Table({ room, seats, me, isHost }) {
       {error && <p className="text-base text-red-400 text-center">{tr(error)}</p>}
 
       {finished && (
-        <FinishedPanel {...{ game, nameOf, myTeam, myTally, teamLabel, t, isHost }} />
+        <FinishedPanel {...{ game, nameOf, myTeam, myTally, teamLabel, t }} />
       )}
 
       {/* Team names and score, just below the game */}
@@ -477,7 +480,8 @@ function SeatChip({ seat, game, seats, nameOf, myTeam, mySeat, t, lastWinner, ri
   const sameTeam = seat % 2 === myTeam
   const tag = seat === mySeat ? t.tagYou : sameTeam ? t.tagPartner : t.tagOpponent
   const active = game.phase !== 'finished' && game.turn === seat
-  const signal = row?.is_ai ? game.signals?.[seat] : null
+  const raw = game.signals?.[seat]
+  const signal = raw === 'z' ? 'z' : row?.is_ai ? raw : null
   return (
     <div
       className={`relative ${wide ? 'w-40' : 'w-[5.25rem]'} shrink-0 h-12 ${
@@ -495,7 +499,12 @@ function SeatChip({ seat, game, seats, nameOf, myTeam, mySeat, t, lastWinner, ri
       )}
 
       {/* signal of the bot's last move: green = fine or automatic, red = the AI model failed */}
-      {signal && (
+      {signal === 'z' && (
+        <span title={t.sigAuto} className="dh-pop absolute top-0 right-1 text-[11px] leading-none">
+          💤
+        </span>
+      )}
+      {(signal === 'g' || signal === 'r') && (
         <span
           key={`${seat}-${signal}-${game.version}`}
           title={signal === 'g' ? t.sigOk : t.sigError}
@@ -524,7 +533,7 @@ function SeatChip({ seat, game, seats, nameOf, myTeam, mySeat, t, lastWinner, ri
   )
 }
 
-function FinishedPanel({ game, nameOf, myTeam, myTally, teamLabel, t, isHost }) {
+function FinishedPanel({ game, nameOf, myTeam, myTally, teamLabel, t }) {
   const r = game.result
   const callLabel = teamLabel(r.callingTeam)
   const myDelta = myTally(r.delta)
@@ -545,7 +554,6 @@ function FinishedPanel({ game, nameOf, myTeam, myTally, teamLabel, t, isHost }) 
         </p>
       )}
       <p className="text-xs text-zinc-500">{t.nextDealer(nameOf(game.nextDealer))}</p>
-      {!isHost && <p className="text-xs text-zinc-500">{t.waitingDeal}</p>}
     </div>
   )
 }

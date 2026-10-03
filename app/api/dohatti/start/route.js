@@ -4,7 +4,8 @@ export const maxDuration = 30
 
 const json = (data, status = 200) => Response.json(data, { status })
 
-// Host only. Starts the first game, or deals a new game after one has finished.
+// Host: starts the first game. After a game has finished, ANY seated human may deal the next one
+// (so a game is never stuck because the host went away).
 export async function POST(request) {
   try {
     const { roomId, secret } = await request.json()
@@ -19,7 +20,6 @@ export async function POST(request) {
       .eq('id', roomId)
       .single()
     if (roomError || !room) return json({ error: 'Room not found.' }, 404)
-    if (room.host_id !== seat.player_id) return json({ error: 'Only the host can do that.' }, 403)
 
     const { data: seats, error: seatsError } = await db
       .from('dohatti_players')
@@ -31,6 +31,10 @@ export async function POST(request) {
     }
 
     const prev = await loadEngine(db, roomId)
+    // Only the host may start the very first game. Once a game exists, anybody at the table may deal.
+    if (room.host_id !== seat.player_id && !prev) {
+      return json({ error: 'Only the host can do that.' }, 403)
+    }
     if (prev && prev.state.phase !== 'finished') {
       // A game is already running (for example the button was pressed twice): not an error.
       await runAI(db, roomId)

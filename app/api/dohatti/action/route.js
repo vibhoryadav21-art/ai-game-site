@@ -51,6 +51,11 @@ export async function POST(request) {
 
     if (result.error) return json({ error: result.error }, 400)
 
+    // The human is back and playing: autopilot ends for this seat.
+    const signals = { ...(result.state.signals || {}) }
+    delete signals[seat]
+    result.state.signals = signals
+
     const saved = await saveEngine(db, roomId, eng.version, { state: result.state, hands, trump })
     if (!saved) return json({ error: 'The game moved on. Please try again.' }, 409)
 

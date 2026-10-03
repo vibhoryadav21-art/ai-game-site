@@ -18,6 +18,7 @@ import {
 import Table from '@/components/dohatti/Table'
 import BotRisk, { RISK_ICON } from '@/components/dohatti/BotRisk'
 import { BOT_RISKS } from '@/lib/dohatti/engine'
+import { HEARTBEAT_MS } from '@/lib/dohatti/presence'
 
 // Screen position relative to me: I sit at the BOTTOM, my partner at the TOP,
 // the next seat on my left, the last seat on my right (same as the game table).
@@ -131,6 +132,25 @@ export default function DoHattiRoomPage() {
       supabase.removeChannel(channel)
     }
   }, [room?.id, refreshSeats])
+
+  // Heartbeat: tell the server "I am still here" while this page is visible.
+  // If the heartbeat stops (tab closed, phone locked, no network), a bot plays on my turn.
+  useEffect(() => {
+    if (!room?.id || !me) return
+    const secret = getPlayerSecret()
+    const ping = () => {
+      if (document.visibilityState === 'visible') {
+        postJson('/api/dohatti/ping', { roomId: room.id, secret }).catch(() => {})
+      }
+    }
+    ping()
+    const timer = setInterval(ping, HEARTBEAT_MS)
+    document.addEventListener('visibilitychange', ping)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', ping)
+    }
+  }, [room?.id, me])
 
   async function run(action) {
     setError('')
