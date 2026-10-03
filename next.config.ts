@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
         // loop. This rule matches first and avoids ever producing that
         // trailing slash.
         source: "/admin",
-        destination: "https://YOUR-PORTAL-PROJECT.vercel.app/admin",
+        destination: "https://ai-game-admin.vercel.app/admin",
       },
       {
         // Everything else under /admin/* is silently proxied to the
@@ -22,7 +22,7 @@ const nextConfig: NextConfig = {
         // browser it still looks like theadda.vercel.app/admin/... —
         // only this server-to-server hop knows it's actually a separate app.
         source: "/admin/:path*",
-        destination: "https://ai-game-admin.vercel.app/admin/:path*",
+        destination: "https://YOUR-PORTAL-PROJECT.vercel.app/admin/:path*",
       },
     ];
   },
