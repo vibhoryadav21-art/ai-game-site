@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import { ensureIdentity, getPlayerName, getPlayerSecret } from '@/lib/dohattiIdentity'
 import { postJson } from '@/lib/dohatti/api'
+import { useDohattiText } from '@/lib/dohattiText'
 import {
   getRoomByCode,
   getSeats,
@@ -26,6 +27,7 @@ const SEAT_POSITION = {
 }
 
 export default function DoHattiRoomPage() {
+  const { t, tr } = useDohattiText()
   const { code } = useParams()
   const router = useRouter()
   const [me, setMe] = useState(null)
@@ -36,13 +38,16 @@ export default function DoHattiRoomPage() {
   const [copied, setCopied] = useState(false)
   const startedRef = useRef(false)
 
-  const refreshSeats = useCallback(async (roomId) => {
-    try {
-      setSeats(await getSeats(roomId))
-    } catch {
-      setError('Could not load the seats.')
-    }
-  }, [])
+  const refreshSeats = useCallback(
+    async (roomId) => {
+      try {
+        setSeats(await getSeats(roomId))
+      } catch {
+        setError(t.couldNotLoadSeats)
+      }
+    },
+    [t.couldNotLoadSeats]
+  )
 
   // Load the room and sit down in the first free seat
   useEffect(() => {
@@ -61,7 +66,7 @@ export default function DoHattiRoomPage() {
       try {
         const r = await getRoomByCode(code)
         if (!r) {
-          setError('Room not found. Check the code.')
+          setError(t.roomNotFound)
           setLoading(false)
           return
         }
@@ -71,20 +76,20 @@ export default function DoHattiRoomPage() {
 
         if (!alreadySeated) {
           if (r.status !== 'waiting') {
-            setError('This game has already started.')
+            setError(t.gameAlreadyStarted)
             setLoading(false)
             return
           }
           const empty = current.find((s) => !s.player_id && !s.is_ai)
           if (!empty) {
-            setError('This room is full.')
+            setError(t.roomFull)
             setLoading(false)
             return
           }
           await claimSeat(r.id, empty.seat, playerId, name)
           current = await getSeats(r.id)
           if (!current.some((s) => s.player_id === playerId)) {
-            setError('That seat was just taken. Reload the page to try again.')
+            setError(t.seatJustTaken)
             setLoading(false)
             return
           }
@@ -94,12 +99,13 @@ export default function DoHattiRoomPage() {
         setSeats(current)
         setLoading(false)
       } catch (e) {
-        setError(e.message || 'Something went wrong.')
+        setError(e.message || t.somethingWrong)
         setLoading(false)
       }
     }
 
     init()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, router])
 
   // Live updates for seats and room status
@@ -130,14 +136,14 @@ export default function DoHattiRoomPage() {
       await action()
       await refreshSeats(room.id)
     } catch (e) {
-      setError(e.message || 'Something went wrong.')
+      setError(e.message || t.somethingWrong)
     }
   }
 
   const sit = (seat) =>
     run(async () => {
       const ok = await claimSeat(room.id, seat, me, getPlayerName())
-      if (!ok) setError('Someone just took that seat.')
+      if (!ok) setError(t.someoneTookSeat)
     })
 
   const toggleAI = (seat, makeAI) => run(() => setSeatAI(room.id, seat, makeAI))
@@ -146,10 +152,7 @@ export default function DoHattiRoomPage() {
     run(() => postJson('/api/dohatti/start', { roomId: room.id, secret: getPlayerSecret() }))
 
   async function leave() {
-    const message =
-      room.status === 'playing'
-        ? 'Leave the game? A bot will take your seat.'
-        : 'Leave this room?'
+    const message = room.status === 'playing' ? t.leaveConfirmPlaying : t.leaveConfirmWaiting
     if (!window.confirm(message)) return
     try {
       await leaveRoom(room, me)
@@ -165,15 +168,15 @@ export default function DoHattiRoomPage() {
   }
 
   if (loading) {
-    return <div className="flex-1 bg-black text-zinc-400 flex items-center justify-center">Loading…</div>
+    return <div className="flex-1 bg-black text-zinc-400 flex items-center justify-center">{t.loading}</div>
   }
 
   if (error && !room) {
     return (
-      <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4">
+      <div className="flex-1 bg-black text-zinc-100 flex flex-col items-center justify-center gap-4 px-4 text-center text-base">
         <p className="text-red-400">{error}</p>
         <Link href="/games/dohatti" className="text-sky-300 hover:underline">
-          ← Back to the lobby
+          {t.backToLobby}
         </Link>
       </div>
     )
@@ -191,16 +194,27 @@ export default function DoHattiRoomPage() {
       {/* Leave: red icon, top right */}
       <button
         onClick={leave}
-        aria-label="Leave room"
-        title="Leave room"
-        className="absolute top-3 right-3 z-20 w-11 h-11 rounded-full border-2 border-red-700 bg-black text-red-500 hover:bg-red-950 flex items-center justify-center transition"
+        aria-label={t.leave}
+        title={t.leave}
+        className="absolute top-3 right-3 z-20 w-11 h-11 rounded-full border-2 border-red-700 bg-black text-red-500 hover:bg-red-950 flex items-center justify-center transition active:scale-95"
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
           <polyline points="16 17 21 12 16 7" />
           <line x1="21" y1="12" x2="9" y2="12" />
         </svg>
       </button>
+
+      <style>{`@keyframes dh-pop { 0% { opacity: 0; transform: scale(.5); } 60% { opacity: 1; transform: scale(1.2); } 100% { transform: scale(1); } } .dh-pop { animation: dh-pop .45s ease-out both; } @media (prefers-reduced-motion: reduce) { .dh-pop { animation: none !important; } }`}</style>
 
       {room.status === 'playing' ? (
         <Table room={room} seats={seats} me={me} isHost={isHost} />
@@ -208,48 +222,45 @@ export default function DoHattiRoomPage() {
         <>
           {/* Start controls first, so they are always visible on a phone */}
           {isHost ? (
-            <div className="w-full max-w-sm flex flex-col items-center gap-2">
+            <div className="w-full max-w-sm flex flex-col items-center gap-2 pr-12">
               <button
                 onClick={start}
                 disabled={!allFilled}
-                className="w-full bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 rounded-xl py-3.5 text-xl transition"
+                className="w-full bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 rounded-xl py-3.5 text-xl transition active:scale-95"
               >
-                Start game
+                {t.startGame}
               </button>
               <button
                 onClick={fillAll}
                 disabled={allFilled}
-                className="text-base bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 rounded-lg px-4 py-2.5 transition"
+                className="text-base bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 rounded-lg px-4 py-2.5 transition active:scale-95"
               >
-                Fill empty seats with AI
+                {t.fillWithAI}
               </button>
-              {!allFilled && (
-                <p className="text-sm text-zinc-500">All 4 seats need a player or an AI to start.</p>
-              )}
+              {!allFilled && <p className="text-sm text-zinc-500 text-center">{t.needAllSeats}</p>}
             </div>
           ) : (
-            <p className="text-base text-zinc-400">Waiting for the host to start the game…</p>
+            <p className="text-base text-zinc-400 pr-12">{t.waitingForHost}</p>
           )}
 
           {/* Who is on which team */}
           <div className="w-full max-w-sm flex flex-col gap-1 text-base bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">
-            <span className="text-sky-300">
-              Your team: {nameAt(myIdx)} + {nameAt(partnerIdx)}
-            </span>
+            <span className="text-sky-300">{t.yourTeamNames(nameAt(myIdx), nameAt(partnerIdx))}</span>
             <span className="text-amber-300">
-              Opponents: {nameAt((myIdx + 1) % 4)} + {nameAt((myIdx + 3) % 4)}
+              {t.opponentsNames(nameAt((myIdx + 1) % 4), nameAt((myIdx + 3) % 4))}
             </span>
           </div>
 
-          <div className="grid grid-cols-3 grid-rows-3 gap-2 w-full max-w-sm">
+          <div dir="ltr" className="grid grid-cols-3 grid-rows-3 gap-2 w-full max-w-sm">
             {seats.map((s) => {
               const pos = (s.seat - myIdx + 4) % 4
               return (
                 <SeatCard
                   key={s.seat}
                   seat={s}
+                  t={t}
                   positionClass={SEAT_POSITION[pos]}
-                  tag={pos === 0 ? 'You' : pos === 2 ? 'Partner' : 'Opponent'}
+                  tag={pos === 0 ? t.tagYou : pos === 2 ? t.tagPartner : t.tagOpponent}
                   mine={pos === 0 || pos === 2}
                   isMe={s.player_id === me}
                   isSeatHost={!!s.player_id && s.player_id === room.host_id}
@@ -262,27 +273,25 @@ export default function DoHattiRoomPage() {
               )
             })}
           </div>
-          <p className="text-sm text-zinc-500 text-center max-w-sm">
-            Tap "Sit here" on an empty seat to move. Partners sit opposite each other.
-          </p>
-
-          {error && <p className="text-base text-red-400">{error}</p>}
+          <p className="text-sm text-zinc-500 text-center max-w-sm">{t.seatHint}</p>
         </>
       )}
 
-      {room.status === 'playing' && error && <p className="text-base text-red-400">{error}</p>}
+      {error && <p className="text-base text-red-400 text-center">{tr(error)}</p>}
 
       {/* Room code: only needed while people are still joining */}
       {room.status !== 'playing' && (
         <div className="w-full max-w-sm flex flex-col items-center gap-2 border-t border-zinc-800 pt-4 mt-2">
           <div className="flex items-center gap-3">
-            <span className="text-sm text-zinc-500">Room code</span>
-            <span className="font-mono text-2xl tracking-[0.3em] text-emerald-200">{room.code}</span>
+            <span className="text-sm text-zinc-500">{t.roomCode}</span>
+            <span dir="ltr" className="font-mono text-2xl tracking-[0.3em] text-emerald-200">
+              {room.code}
+            </span>
             <button
               onClick={copyCode}
-              className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-3 py-1.5 transition"
+              className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-3 py-1.5 transition active:scale-95"
             >
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? t.copied : t.copy}
             </button>
           </div>
         </div>
@@ -293,6 +302,7 @@ export default function DoHattiRoomPage() {
 
 function SeatCard({
   seat,
+  t,
   positionClass,
   tag,
   mine,
@@ -317,38 +327,38 @@ function SeatCard({
       {seat.is_ai && <span className="text-base">🤖 {seat.display_name}</span>}
 
       {seat.player_id && (
-        <span className="text-base leading-tight">
+        <span key={seat.display_name} className="dh-pop text-base leading-tight">
           {isSeatHost && '👑 '}
           {seat.display_name}
-          {isMe && <span className="text-emerald-300"> (you)</span>}
+          {isMe && <span className="text-emerald-300"> {t.you}</span>}
         </span>
       )}
 
-      {isEmpty && <span className="text-base text-zinc-500">Empty</span>}
+      {isEmpty && <span className="text-base text-zinc-500">{t.empty}</span>}
 
       <div className="flex gap-1 flex-wrap justify-center">
         {isEmpty && iAmSeated && (
           <button
             onClick={onSit}
-            className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-2.5 py-1.5 transition"
+            className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-2.5 py-1.5 transition active:scale-95"
           >
-            Sit here
+            {t.sitHere}
           </button>
         )}
         {isEmpty && iAmHost && (
           <button
             onClick={onAddAI}
-            className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-2.5 py-1.5 transition"
+            className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-2.5 py-1.5 transition active:scale-95"
           >
-            Add AI
+            {t.addAI}
           </button>
         )}
         {seat.is_ai && iAmHost && (
           <button
             onClick={onRemoveAI}
-            className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-2.5 py-1.5 transition"
+            className="text-sm bg-zinc-800 hover:bg-zinc-700 rounded px-2.5 py-1.5 transition active:scale-95"
           >
-            Remove AI
+            {t.removeAI}
           </button>
         )}
       </div>
